@@ -16,7 +16,7 @@ venv/
 *.swo
 
 # Data (DB, uploads, secrets)
-data/
+
 
 # Environment
 .env
