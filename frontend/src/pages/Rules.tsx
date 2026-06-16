@@ -1,0 +1,271 @@
+import React, { useState } from 'react';
+import { Table, Button, Modal, Form, Input, Select, Switch, Space, message, Typography, Tag, Popconfirm, Upload } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined, ExperimentOutlined, UploadOutlined } from '@ant-design/icons';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { rules, aiJudges, scoreConfigs, evalPrompts, rubrics, objectives as objectivesApi } from '../api/client';
+
+const RULE_TYPES = [
+  { value: 'exact_match', label: '精确匹配', category: 'builtin' },
+  { value: 'keyword', label: '关键词匹配', category: 'builtin' },
+  { value: 'regex', label: '正则匹配', category: 'builtin' },
+  { value: 'duration', label: '响应时间', category: 'builtin' },
+  { value: 'length', label: '长度约束', category: 'builtin' },
+  { value: 'llm_judge', label: 'AI 模型评分', category: 'ai' },
+  { value: 'llm_judge_ref', label: 'AI 参照答案评分', category: 'ai' },
+  { value: 'llm_judge_rubric', label: '多维度 AI 评分', category: 'ai' },
+];
+
+const AI_RULE_TYPES = ['llm_judge', 'llm_judge_ref', 'llm_judge_rubric'];
+
+const Rules: React.FC = () => {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewResult, setPreviewResult] = useState<any>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importResult, setImportResult] = useState<any>(null);
+  const [importing, setImporting] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
+  const [form] = Form.useForm();
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({ queryKey: ['rules'], queryFn: () => rules.list() });
+  const { data: ruleTypes } = useQuery({ queryKey: ['rule-types'], queryFn: () => rules.types() });
+  const { data: judgesData } = useQuery({ queryKey: ['ai-judges-list'], queryFn: () => aiJudges.list() });
+  const { data: evalPromptsData } = useQuery({ queryKey: ['eval-prompts-list'], queryFn: () => evalPrompts.list() });
+  const { data: rubricsData } = useQuery({ queryKey: ['rubrics-list'], queryFn: () => rubrics.list() });
+  const { data: configsData } = useQuery({ queryKey: ['score-configs'], queryFn: () => scoreConfigs.list() });
+  const { data: objectivesData } = useQuery({ queryKey: ['objectives'], queryFn: () => objectivesApi.list() });
+
+  const createMut = useMutation({
+    mutationFn: (d: any) => editing ? rules.update(editing.id, d) : rules.create(d),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['rules'] }); message.success('保存成功'); setModalOpen(false); },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => rules.delete(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['rules'] }); message.success('已删除'); },
+  });
+
+  const handlePreview = async (ruleId: string) => {
+    setPreviewResult({ loading: true });
+    setPreviewOpen(true);
+    try {
+      const result = await rules.preview(ruleId, {
+        input: '测试输入内容',
+        actual_output: '智能体的实际回复内容',
+        expected_output: '期望的回复内容',
+      });
+      setPreviewResult(result);
+    } catch {
+      setPreviewResult({ error: '预览失败' });
+    }
+  };
+
+  const openEdit = (record?: any) => {
+    setEditing(record);
+    const values = record ? { ...record } : { type: 'exact_match', enabled: true, weight: 1.0, threshold: 0.8 };
+    if (values.config && typeof values.config === 'object') {
+      values.config = JSON.stringify(values.config, null, 2);
+    }
+    form.setFieldsValue(values);
+    setModalOpen(true);
+  };
+
+  const selectedType = Form.useWatch('type', form);
+  const isAiType = selectedType && AI_RULE_TYPES.includes(selectedType);
+
+  const columns = [
+    { title: '#', key: 'index', width: 60, render: (_: any, __: any, i: number) => i + 1 },
+    { title: '名称', dataIndex: 'name' },
+    { title: '规则类型', dataIndex: 'type', render: (t: string) => { const lt = RULE_TYPES.find(r => r.value === t); return <Tag>{lt?.label || t}</Tag>; } },
+    { title: '权重', dataIndex: 'weight', width: 80 },
+    { title: '阈值', dataIndex: 'threshold', width: 80 },
+    { title: '评价目标', dataIndex: 'objectives', width: 200,
+      render: (obj: string[]) => obj?.length ? obj.map(o => <Tag key={o}>{o}</Tag>) : '-' },
+    { title: '启用', dataIndex: 'enabled', width: 60, render: (v: boolean) => v ? <Tag color="green">是</Tag> : <Tag>否</Tag> },
+    {
+      title: '操作', width: 200,
+      render: (_: any, r: any) => (
+        <Space>
+          <Button size="small" icon={<ExperimentOutlined />} onClick={() => handlePreview(r.id)}>预览</Button>
+          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} />
+          <Popconfirm title="确定删除?" onConfirm={() => deleteMut.mutate(r.id)}>
+            <Button size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <div>
+      <div className="page-header">
+        <h1>评估规则</h1>
+        <div className="page-header-actions">
+          <Button icon={<UploadOutlined />} onClick={() => { setImportOpen(true); setImportResult(null); }}>导入规则</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openEdit()}>新建规则</Button>
+        </div>
+      </div>
+
+      <Table dataSource={data || []} rowKey="id" loading={isLoading} columns={columns} pagination={false} />
+
+      <Modal title={editing ? '编辑规则' : '新建规则'} open={modalOpen} onCancel={() => setModalOpen(false)}
+        onOk={() => form.submit()} width={720}>
+        <Form form={form} layout="vertical" onFinish={(v) => createMut.mutate(v)}>
+          <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="description" label="描述">
+            <Input.TextArea rows={2} placeholder="规则的作用和适用场景说明" />
+          </Form.Item>
+          <Form.Item name="type" label="规则类型" rules={[{ required: true }]}>
+            <Select options={RULE_TYPES} />
+          </Form.Item>
+
+          {/* Show ScoreConfig for all rule types */}
+          <Form.Item name="score_config_id" label="评分配置模板">
+            <Select
+              placeholder="选择分数类型约束(可选)"
+              allowClear
+              options={(configsData || []).map((c: any) => ({
+                value: c.id,
+                label: `${c.name} (${c.data_type})`,
+              }))}
+            />
+          </Form.Item>
+
+          {/* AI Judge fields - only visible for AI rule types */}
+          {isAiType && (
+            <>
+              <Form.Item name="ai_judge_model_id" label="AI 评估模型" rules={[{ required: true }]}>
+                <Select placeholder="选择 AI 评估模型"
+                  options={(judgesData || []).map((j: any) => ({ value: j.id, label: `${j.name} (${j.model_name})` }))} />
+              </Form.Item>
+              <Form.Item name="ai_eval_prompt_id" label="评估提示词模板">
+                <Select placeholder="选择评估提示词模板(可选)" allowClear
+                  options={(evalPromptsData || []).map((p: any) => ({ value: p.id, label: `${p.name} (${p.strategy})` }))} />
+              </Form.Item>
+              <Form.Item name="eval_strategy" label="评估策略">
+                <Select placeholder="选择评估策略(可选，覆盖模板默认)" allowClear
+                  options={[
+                    { value: 'simple', label: '通用评分 (Simple)' },
+                    { value: 'reference', label: '参照对比 (Reference)' },
+                    { value: 'rubric', label: '多维度评分 (Rubric)' },
+                    { value: 'chain_of_thought', label: '思维链评分 (Chain-of-Thought)' },
+                    { value: 'few_shot', label: '少样本评分 (Few-Shot)' },
+                    { value: 'pairwise', label: '对比选择 (Pairwise)' },
+                  ]} />
+              </Form.Item>
+              {selectedType === 'llm_judge_rubric' && (
+                <Form.Item name="ai_rubric_id" label="评分维度模板" rules={[{ required: true }]}>
+                  <Select placeholder="选择评分维度模板"
+                    options={(rubricsData || []).map((r: any) => ({ value: r.id, label: r.name }))} />
+                </Form.Item>
+              )}
+            </>
+          )}
+
+          <Form.Item name="objectives" label="关联评价目标">
+            <Select mode="multiple" placeholder="选择评价目标"
+              options={(objectivesData || []).map((o: any) => ({ value: o.name, label: o.name }))} />
+          </Form.Item>
+          <Space style={{ width: '100%' }} size={16}>
+            <Form.Item name="weight" label="权重"><Input type="number" step={0.1} /></Form.Item>
+            <Form.Item name="threshold" label="阈值"><Input type="number" step={0.1} /></Form.Item>
+            <Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item>
+          </Space>
+          <Form.Item name="config" label="配置(JSON)">
+            <Input.TextArea rows={4} placeholder='{"case_sensitive": true}' />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal title="导入评分规则" open={importOpen} onCancel={() => setImportOpen(false)}
+        footer={null} width={640}>
+        <Upload.Dragger
+          accept=".json"
+          multiple={false}
+          showUploadList={false}
+          beforeUpload={(file) => {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+              try {
+                const content = JSON.parse(e.target?.result as string);
+                if (!content.rules || !Array.isArray(content.rules)) {
+                  message.error('无效的规则文件：缺少 rules 数组');
+                  return;
+                }
+                setImporting(true);
+                const result = await rules.importRules(content);
+                setImportResult(result);
+                queryClient.invalidateQueries({ queryKey: ['rules'] });
+                message.success(result.message);
+              } catch (err: any) {
+                message.error(`导入失败: ${err.message}`);
+                setImportResult({ error: err.message });
+              } finally {
+                setImporting(false);
+              }
+            };
+            reader.readAsText(file);
+            return false;
+          }}
+        >
+          <Typography.Text style={{ fontSize: 16 }}><UploadOutlined /></Typography.Text>
+          <Typography.Text style={{ display: 'block', marginTop: 8 }}>
+            {importing ? '正在导入...' : '点击或拖拽 JSON 规则文件到此区域'}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            支持 评测规则_完整版.json 格式
+          </Typography.Text>
+        </Upload.Dragger>
+
+        {importResult && !importResult.error && (
+          <div style={{ marginTop: 16 }}>
+            <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>导入结果:</Typography.Text>
+            {importResult.results?.objectives?.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>评估维度:</Typography.Text>
+                {importResult.results.objectives.map((o: any, i: number) => (
+                  <div key={i} style={{ fontSize: 13, padding: '2px 0' }}>
+                    {o.status === 'created' ? '✅' : '❌'} {o.name}
+                    {o.error && <Typography.Text type="danger" style={{ fontSize: 12 }}> — {o.error}</Typography.Text>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {importResult.results?.rules?.length > 0 && (
+              <div>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>评分规则:</Typography.Text>
+                {importResult.results.rules.map((r: any, i: number) => (
+                  <div key={i} style={{ fontSize: 13, padding: '2px 0' }}>
+                    {r.status === 'created' ? '✅' : '❌'} {r.name}
+                    {r.error && <Typography.Text type="danger" style={{ fontSize: 12 }}> — {r.error}</Typography.Text>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {importResult?.error && (
+          <div style={{ marginTop: 16 }}>
+            <Typography.Text type="danger">导入出错: {importResult.error}</Typography.Text>
+          </div>
+        )}
+      </Modal>
+
+      <Modal title="规则预览" open={previewOpen} onCancel={() => setPreviewOpen(false)} footer={null}>
+        {previewResult?.loading ? <Typography.Text>计算中...</Typography.Text> : (
+          previewResult ? (
+            <div>
+              <p><strong>分数:</strong> {previewResult.score}</p>
+              <p><strong>通过:</strong> {previewResult.passed ? '✅' : '❌'}</p>
+              <p><strong>详情:</strong> {JSON.stringify(previewResult.details)}</p>
+              {previewResult.ai_reasoning && <p><strong>AI 分析:</strong> {previewResult.ai_reasoning}</p>}
+            </div>
+          ) : <Typography.Text type="danger">预览失败</Typography.Text>
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+export default Rules;
