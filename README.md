@@ -315,8 +315,8 @@ AgentTestMate 使用工作空间（Space）机制实现多用户数据隔离：
 ### 1. 克隆并安装
 
 ```bash
-git clone https://github.com/yourusername/agentmate.git
-cd agentmate
+git clone https://github.com/yourusername/agenttestmate.git
+cd agenttestmate
 ```
 
 ### 2. 启动后端
@@ -422,7 +422,7 @@ AgentMate 内置了多层安全防护：
 [Apache License 2.0](LICENSE)
 
 ```
-Copyright 2026 AgentMate Contributors
+Copyright 2026 AgentTestMate Contributors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
