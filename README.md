@@ -315,7 +315,7 @@ AgentTestMate 使用工作空间（Space）机制实现多用户数据隔离：
 ### 1. 克隆并安装
 
 ```bash
-git clone https://github.com/yourusername/AgentTestMate.git
+git clone https://github.com/ambyron/AgentTestMate.git
 cd AgentTestMate
 ```
 
