@@ -297,7 +297,15 @@ const TaskDetail: React.FC = () => {
                   <div style={{ whiteSpace: 'pre-wrap', maxHeight: 150, overflow: 'auto', background: '#fafafa', padding: 8, borderRadius: 4 }}>{r.expected_output || '-'}</div>
                 </Descriptions.Item>
                 <Descriptions.Item label={<Typography.Text strong>实际输出</Typography.Text>}>
-                  <div style={{ whiteSpace: 'pre-wrap', maxHeight: 200, overflow: 'auto', background: '#f6ffed', padding: 8, borderRadius: 4 }}>{r.raw_output || '-'}</div>
+                  <div style={{ whiteSpace: 'pre-wrap', maxHeight: 200, overflow: 'auto', background: '#f6ffed', padding: 8, borderRadius: 4 }}>
+                    {r.display_output || '-'}
+                    {r.raw_output && r.display_output !== r.raw_output && (
+                      <details style={{ marginTop: 8, fontSize: 12, color: '#999' }}>
+                        <summary style={{ cursor: 'pointer' }}>查看原始响应</summary>
+                        <pre style={{ marginTop: 4, padding: 8, background: '#f5f5f5', borderRadius: 4, maxHeight: 300, overflow: 'auto', fontSize: 11, whiteSpace: 'pre-wrap' }}>{r.raw_output}</pre>
+                      </details>
+                    )}
+                  </div>
                 </Descriptions.Item>
               </Descriptions>
 

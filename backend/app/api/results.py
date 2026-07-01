@@ -2,6 +2,7 @@
 
 import csv
 import io
+import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
@@ -23,6 +24,57 @@ def _fmt(v, decimals: int = 2) -> str:
     if v is None:
         return "-"
     return f"{v:.{decimals}f}"
+
+
+def _extract_display_output(raw_output: str | None) -> str:
+    """Extract user-readable AI response from raw API output.
+
+    Handles JSON formats from OpenAI / DeepSeek / Anthropic / Dify,
+    and falls back to the raw text when parsing fails or format is unknown.
+    """
+    if not raw_output:
+        return ""
+
+    # Try JSON extraction for known formats
+    try:
+        data = json.loads(raw_output)
+
+        # OpenAI / DeepSeek / compatible format
+        if "choices" in data and isinstance(data["choices"], list) and data["choices"]:
+            c0 = data["choices"][0]
+            if isinstance(c0, dict):
+                if "message" in c0 and isinstance(c0["message"], dict):
+                    return c0["message"].get("content", "") or ""
+                if "text" in c0:
+                    return c0["text"]
+
+        # Anthropic format
+        if "content" in data and isinstance(data["content"], list):
+            texts = [
+                c["text"] for c in data["content"]
+                if isinstance(c, dict) and c.get("type") == "text"
+            ]
+            if texts:
+                return "\n".join(texts)
+
+        # Dify format
+        if "answer" in data:
+            return data["answer"]
+
+        # SSE-like wrapped responses (e.g. "data: {...}\n\ndata: {...}")
+        if "partOps" in data:
+            for op in data.get("partOps", []):
+                pv = op.get("partValue", {})
+                if op.get("partType") == "text" and pv.get("text"):
+                    return pv["text"]
+                if op.get("partType") == "answer" and pv.get("answer"):
+                    return pv["answer"]
+
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Non-JSON: trim to reasonable length
+    return raw_output[:5000]
 
 
 @router.get("/{task_id}/results")
@@ -49,6 +101,7 @@ async def list_results(task_id: str, passed: bool | None = None,
             "case_id": r.case_id,
             "raw_input": r.raw_input,
             "raw_output": r.raw_output,
+            "display_output": _extract_display_output(r.raw_output),
             "expected_output": expected_map.get(r.case_id, ""),
             "response_time_ms": r.response_time_ms,
             "status_code": r.status_code,

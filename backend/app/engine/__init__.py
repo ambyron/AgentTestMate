@@ -78,6 +78,16 @@ class AgentInvoker:
         elif auth_type == "basic" and auth_creds:
             headers["Authorization"] = f"Basic {auth_creds}"
 
+        # Render template variables in headers (e.g. {{$timestamp}}, {{input}})
+        rendered_headers = {}
+        for k, v in headers.items():
+            if isinstance(v, str):
+                v = v.replace("{{$timestamp}}", str(int(time.time() * 1000)))
+                v = v.replace("{{$TIMESTAMP}}", str(int(time.time() * 1000)))
+                v = v.replace("{{input}}", input_text).replace("{{INPUT}}", input_text)
+            rendered_headers[k] = v
+        headers = rendered_headers
+
         body_template = agent_cfg.get("body_template", {})
         body = self._render_body(body_template, input_text)
 
