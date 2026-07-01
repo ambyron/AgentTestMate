@@ -432,7 +432,6 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
 
         except Exception as exc:
             logger.error("Task %s failed with exception: %s\n%s", task_id, exc, traceback.format_exc())
-            # ===== 修改开始：先回滚会话，再更新状态 =====
             try:
                 # 1. 回滚当前会话，清除“待回滚”状态
                 await db.rollback()
@@ -449,7 +448,7 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                         await new_db.commit()
                 except Exception as final_exc:
                     logger.error("Second attempt to update task %s status also failed: %s", task_id, final_exc)
-            # ===== 修改结束 =====
+            
 
 
         finally:
