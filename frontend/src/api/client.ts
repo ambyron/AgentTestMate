@@ -153,6 +153,7 @@ export const rubrics = {
 // Objective
 export const objectives = {
   list: () => client.get('/objectives').then(r => r.data),
+  get: (id: string) => client.get(`/objectives/${id}`).then(r => r.data),
   create: (data: any) => client.post('/objectives', data).then(r => r.data),
   update: (id: string, data: any) => client.put(`/objectives/${id}`, data).then(r => r.data),
   delete: (id: string) => client.delete(`/objectives/${id}`),

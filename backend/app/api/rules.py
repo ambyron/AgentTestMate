@@ -28,6 +28,9 @@ async def create_rule(data: dict, db: AsyncSession = Depends(get_db),
                 data[field] = _json.loads(data[field])
             except (_json.JSONDecodeError, TypeError):
                 data[field] = {} if field == "config" else []
+    # Ensure objectives is always a list (single selection from frontend)
+    if "objectives" in data and not isinstance(data["objectives"], list):
+        data["objectives"] = [data["objectives"]]
     if current_space:
         data["space_id"] = current_space
     return await repo.create_rule(db, data)
@@ -73,6 +76,8 @@ async def update_rule(rule_id: str, data: dict, db: AsyncSession = Depends(get_d
                 data[field] = _json.loads(data[field])
             except (_json.JSONDecodeError, TypeError):
                 data[field] = {} if field == "config" else []
+    if "objectives" in data and not isinstance(data["objectives"], list):
+        data["objectives"] = [data["objectives"]]
     rule = await repo.update_rule(db, rule_id, data)
     if not rule:
         raise HTTPException(404, "Rule not found")
@@ -129,6 +134,38 @@ async def create_objective(data: dict, db: AsyncSession = Depends(get_db),
 async def list_objectives(db: AsyncSession = Depends(get_db),
                           current_space: str | None = Depends(get_current_space)):
     return await repo.list_objectives(db, space_id=current_space)
+
+
+@objectives_router.get("/{objective_id}")
+async def get_objective(objective_id: str, db: AsyncSession = Depends(get_db),
+                         current_user: User = Depends(get_current_user),
+                         current_space: str | None = Depends(get_current_space)):
+    """Get a single objective with its related rules."""
+    obj = await repo.get_objective(db, objective_id)
+    if not obj:
+        raise HTTPException(404, "Objective not found")
+    if not await repo.verify_space_access(db, repo.Objective, objective_id, current_space, current_user.role):
+        raise HTTPException(403, "Access denied")
+
+    # Find related rules that reference this objective name
+    # Python-side filtering: SQLAlchemy auto-deserializes JSON to Python list
+    all_rules = await repo.list_rules(db, space_id=current_space)
+    rules_result = [
+        r for r in all_rules
+        if r.objectives and isinstance(r.objectives, list) and obj.name in r.objectives
+    ]
+    related_rules = [
+        {"id": r.id, "name": r.name, "type": r.type, "enabled": r.enabled, "weight": r.weight}
+        for r in rules_result
+    ]
+
+    return {
+        "id": obj.id,
+        "name": obj.name,
+        "description": obj.description,
+        "created_at": str(obj.created_at) if obj.created_at else None,
+        "rules": related_rules,
+    }
 
 
 @objectives_router.put("/{objective_id}")

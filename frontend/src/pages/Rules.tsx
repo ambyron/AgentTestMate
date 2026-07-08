@@ -17,6 +17,52 @@ const RULE_TYPES = [
 
 const AI_RULE_TYPES = ['llm_judge', 'llm_judge_ref', 'llm_judge_rubric'];
 
+/* ─── Config templates per rule type ─── */
+interface ConfigTemplate {
+  template: string;
+  description: string;
+}
+
+const CONFIG_TEMPLATES: Record<string, ConfigTemplate> = {
+  exact_match: {
+    template: JSON.stringify({ case_sensitive: true }, null, 2),
+    description: 'case_sensitive (bool): 是否区分大小写，不区分时 "ABC" 与 "abc" 视为相等',
+  },
+  keyword: {
+    template: JSON.stringify({ include: [], exclude: [] }, null, 2),
+    description:
+      'include (string[]): 输出必须包含的关键词列表\n'
+        + 'exclude (string[]): 输出中不能出现的词语\n'
+        + '【注意】include 为空时，自动从期望输出中提取有意义的词语（英文单词、中文双字词、数字）作为匹配关键词',
+  },
+  regex: {
+    template: JSON.stringify({ pattern: '', match_type: 'search' }, null, 2),
+    description:
+      'pattern (string): 正则表达式\n'
+        + 'match_type (string): 匹配方式 — search(搜索) / match(开头匹配) / fullmatch(完全匹配)',
+  },
+  duration: {
+    template: JSON.stringify({ min_ms: 0, max_ms: 30000 }, null, 2),
+    description: 'min_ms (number): 最小响应时间(毫秒)\nmax_ms (number): 最大响应时间(毫秒)',
+  },
+  length: {
+    template: JSON.stringify({ min_chars: 0, max_chars: 10000 }, null, 2),
+    description: 'min_chars (number): 最小字符数\nmax_chars (number): 最大字符数',
+  },
+  llm_judge: {
+    template: JSON.stringify({ criteria: '' }, null, 2),
+    description: 'criteria (string): AI 评分准则，描述期望从哪些维度评估回复质量',
+  },
+  llm_judge_ref: {
+    template: JSON.stringify({ criteria: '' }, null, 2),
+    description: 'criteria (string): AI 评分准则，描述如何对比实际输出与期望输出',
+  },
+  llm_judge_rubric: {
+    template: JSON.stringify({ criteria: '' }, null, 2),
+    description: 'criteria (string): AI 评分准则，描述各评分维度的打分标准',
+  },
+};
+
 const Rules: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -29,7 +75,6 @@ const Rules: React.FC = () => {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({ queryKey: ['rules'], queryFn: () => rules.list() });
-  const { data: ruleTypes } = useQuery({ queryKey: ['rule-types'], queryFn: () => rules.types() });
   const { data: judgesData } = useQuery({ queryKey: ['ai-judges-list'], queryFn: () => aiJudges.list() });
   const { data: evalPromptsData } = useQuery({ queryKey: ['eval-prompts-list'], queryFn: () => evalPrompts.list() });
   const { data: rubricsData } = useQuery({ queryKey: ['rubrics-list'], queryFn: () => rubrics.list() });
@@ -63,22 +108,36 @@ const Rules: React.FC = () => {
 
   const openEdit = (record?: any) => {
     setEditing(record);
-    const values = record ? { ...record } : { type: 'exact_match', enabled: true, weight: 1.0, threshold: 0.8 };
-    if (values.config && typeof values.config === 'object') {
-      values.config = JSON.stringify(values.config, null, 2);
+    if (record) {
+      const values = { ...record };
+      if (values.config && typeof values.config === 'object') {
+        values.config = JSON.stringify(values.config, null, 2);
+      }
+      form.setFieldsValue(values);
+    } else {
+      // New rule: all fields empty
+      form.resetFields();
     }
-    form.setFieldsValue(values);
     setModalOpen(true);
+  };
+
+  /* ─── Auto-fill config template when rule type changes ─── */
+  const handleTypeChange = (type: string) => {
+    const tpl = CONFIG_TEMPLATES[type];
+    if (tpl && !editing) {
+      // Only auto-fill for new rules
+      form.setFieldValue('config', tpl.template);
+    }
   };
 
   const selectedType = Form.useWatch('type', form);
   const isAiType = selectedType && AI_RULE_TYPES.includes(selectedType);
+  const currentConfig = selectedType ? CONFIG_TEMPLATES[selectedType] : null;
 
   const columns = [
     { title: '#', key: 'index', width: 60, render: (_: any, __: any, i: number) => i + 1 },
     { title: '名称', dataIndex: 'name' },
     { title: '规则类型', dataIndex: 'type', render: (t: string) => { const lt = RULE_TYPES.find(r => r.value === t); return <Tag>{lt?.label || t}</Tag>; } },
-    { title: '权重', dataIndex: 'weight', width: 80 },
     { title: '阈值', dataIndex: 'threshold', width: 80 },
     { title: '评价目标', dataIndex: 'objectives', width: 200,
       render: (obj: string[]) => obj?.length ? obj.map(o => <Tag key={o}>{o}</Tag>) : '-' },
@@ -117,7 +176,7 @@ const Rules: React.FC = () => {
             <Input.TextArea rows={2} placeholder="规则的作用和适用场景说明" />
           </Form.Item>
           <Form.Item name="type" label="规则类型" rules={[{ required: true }]}>
-            <Select options={RULE_TYPES} />
+            <Select options={RULE_TYPES} onChange={handleTypeChange} placeholder="请选择规则类型" />
           </Form.Item>
 
           {/* Show ScoreConfig for all rule types */}
@@ -163,17 +222,21 @@ const Rules: React.FC = () => {
             </>
           )}
 
-          <Form.Item name="objectives" label="关联评价目标">
-            <Select mode="multiple" placeholder="选择评价目标"
+          <Form.Item name="objectives" label="关联评估目标">
+            <Select placeholder="选择评估目标（一个规则只关联一个目标）"
               options={(objectivesData || []).map((o: any) => ({ value: o.name, label: o.name }))} />
           </Form.Item>
           <Space style={{ width: '100%' }} size={16}>
-            <Form.Item name="weight" label="权重"><Input type="number" step={0.1} /></Form.Item>
-            <Form.Item name="threshold" label="阈值"><Input type="number" step={0.1} /></Form.Item>
-            <Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item>
+            <Form.Item name="threshold" label="阈值" initialValue={0.8}><Input type="number" step={0.1} /></Form.Item>
+            <Form.Item name="enabled" label="启用" valuePropName="checked" initialValue={true}><Switch /></Form.Item>
           </Space>
+          {currentConfig && (
+            <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f6f8fa', borderRadius: 6, fontSize: 13, whiteSpace: 'pre-wrap', color: '#555' }}>
+              {currentConfig.description}
+            </div>
+          )}
           <Form.Item name="config" label="配置(JSON)">
-            <Input.TextArea rows={4} placeholder='{"case_sensitive": true}' />
+            <Input.TextArea rows={4} placeholder={selectedType ? '选择规则类型后将自动生成模板' : '请先选择规则类型'} />
           </Form.Item>
         </Form>
       </Modal>
