@@ -436,8 +436,20 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
 
         except Exception as exc:
             logger.error("Task %s failed with exception: %s\n%s", task_id, exc, traceback.format_exc())
-            await repo.update_task(db, task_id, {"status": "failed"})
-            await db.commit()
+            # 先回滚会话清除"待回滚"状态，再用当前会话（已回滚）更新状态为 failed
+            try:
+                await db.rollback()
+                await repo.update_task(db, task_id, {"status": "failed"})
+                await db.commit()
+            except Exception as inner_exc:
+                logger.error("Failed to update task %s status to failed: %s", task_id, inner_exc)
+                # 新会话兜底
+                try:
+                    async with async_session_factory() as new_db:
+                        await repo.update_task(new_db, task_id, {"status": "failed"})
+                        await new_db.commit()
+                except Exception as final_exc:
+                    logger.error("Second attempt to update task %s status also failed: %s", task_id, final_exc)
         finally:
             _task_engines.pop(task_id, None)
 
