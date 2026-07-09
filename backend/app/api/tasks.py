@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import repositories as repo
-from app.__init_db import get_db, async_session_factory
+from app.__init_db import get_db
 from app.auth.deps import get_current_user, get_current_space
 from app.models.user import User
 from app.config import settings
@@ -132,7 +132,6 @@ async def start_task(task_id: str, background_tasks: BackgroundTasks, db: AsyncS
         "started_at": datetime.now(timezone.utc),
         "progress": {"total": 0, "completed": 0, "failed": 0, "passed": 0},
     })
-    await db.commit()
 
     # Launch background execution
     background_tasks.add_task(_execute_task, task_id, engine)
@@ -291,7 +290,7 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                     if case_rule_refs:
                         applicable = [r for r in all_rules if r.id in case_rule_refs]
 
-                    if applicable and case_objectives:
+                    if applicable:
                         for rule in applicable:
                             # Ensure rule.config is a dict (defensive against bad imports)
                             raw_config = rule.config
@@ -432,25 +431,8 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
 
         except Exception as exc:
             logger.error("Task %s failed with exception: %s\n%s", task_id, exc, traceback.format_exc())
-            try:
-                # 1. 回滚当前会话，清除“待回滚”状态
-                await db.rollback()
-                # 2. 使用当前会话（已回滚）更新状态为 faile
-                await repo.update_task(db, task_id, {"status": "failed"})
-                await db.commit()
-            except Exception as inner_exc:
-                # 如果连更新状态都失败，记录错误，但不再抛出，避免导致应用崩溃
-                logger.error("Failed to update task %s status to failed: %s", task_id, inner_exc)
-                # 可以选择使用新的独立会话重试一次
-                try:
-                    async with async_session_factory() as new_db:
-                        await repo.update_task(new_db, task_id, {"status": "failed"})
-                        await new_db.commit()
-                except Exception as final_exc:
-                    logger.error("Second attempt to update task %s status also failed: %s", task_id, final_exc)
-            
-
-
+            await repo.update_task(db, task_id, {"status": "failed"})
+            await db.commit()
         finally:
             _task_engines.pop(task_id, None)
 
@@ -483,7 +465,6 @@ async def cancel_task(task_id: str, db: AsyncSession = Depends(get_db),
     if engine:
         engine.cancel()
     await repo.update_task(db, task_id, {"status": "cancelled"})
-    await db.commit()
     return {"message": "Task cancelled"}
 
 
