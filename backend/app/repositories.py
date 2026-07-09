@@ -35,8 +35,8 @@ _AGENT_FIELDS = {"name", "description", "api_base_url", "method", "headers_templ
                  "body_template", "auth_type", "auth_credentials", "status"}
 _DATASET_FIELDS = {"name", "description", "dataset_type", "tags"}
 _TESTCASE_FIELDS = {"case_id", "input", "expected_output", "objectives", "tags", "rule_refs", "sort_order"}
-_RULE_FIELDS = {"name", "description", "type", "config", "objectives", "weight", "threshold",
-                "enabled", "score_config_id", "ai_judge_model_id", "ai_eval_prompt_id",
+_RULE_FIELDS = {"name", "description", "type", "config", "objectives",
+                "threshold", "enabled", "score_config_id", "ai_judge_model_id", "ai_eval_prompt_id",
                 "ai_rubric_id", "eval_strategy", "custom_script"}
 _SCORE_CONFIG_FIELDS = {"name", "description", "data_type", "min_value", "max_value", "categories", "default"}
 _OBJECTIVE_FIELDS = {"name", "description", "default_weight"}
@@ -525,6 +525,11 @@ async def create_eval_prompt(db: AsyncSession, data: dict) -> EvalPromptTemplate
     # so ensure it always has a value
     if "template_content" not in data:
         data["template_content"] = data.get("user_prompt_template", "")
+    # Auto-assign seq (101+ for custom templates; 1-100 reserved for built-in)
+    if "seq" not in data or data.get("seq") is None:
+        from sqlalchemy import func as _sa_func
+        max_seq = (await db.execute(select(_sa_func.max(EvalPromptTemplate.seq)))).scalar()
+        data["seq"] = max(max_seq or 100, 100) + 1  # always ≥101
     ep = EvalPromptTemplate(id=_uuid(), **data, created_at=_now(), updated_at=_now())
     db.add(ep)
     await db.flush()

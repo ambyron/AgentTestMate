@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Table, Button, Modal, Form, Input, Select, Switch, Space, message, Typography, Tag, Popconfirm, Upload } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, ExperimentOutlined, UploadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { rules, aiJudges, scoreConfigs, evalPrompts, rubrics, objectives as objectivesApi } from '../api/client';
+import { rules, evalPrompts, rubrics, objectives as objectivesApi } from '../api/client';
 
 const RULE_TYPES = [
   { value: 'exact_match', label: '精确匹配', category: 'builtin' },
@@ -16,6 +16,19 @@ const RULE_TYPES = [
 ];
 
 const AI_RULE_TYPES = ['llm_judge', 'llm_judge_ref', 'llm_judge_rubric'];
+
+/* ─── Rule type → scoring data type mapping ─── */
+const RULE_DATA_TYPES: Record<string, { label: string; color: string }> = {
+  exact_match: { label: 'NUMERIC → BOOLEAN', color: 'green' },
+  keyword: { label: 'NUMERIC', color: 'blue' },
+  regex: { label: 'BOOLEAN', color: 'green' },
+  duration: { label: 'BOOLEAN', color: 'green' },
+  length: { label: 'BOOLEAN', color: 'green' },
+  llm_judge: { label: 'NUMERIC', color: 'blue' },
+  llm_judge_ref: { label: 'NUMERIC', color: 'blue' },
+  llm_judge_rubric: { label: 'NUMERIC', color: 'blue' },
+};
+
 
 /* ─── Config templates per rule type ─── */
 interface ConfigTemplate {
@@ -75,10 +88,8 @@ const Rules: React.FC = () => {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({ queryKey: ['rules'], queryFn: () => rules.list() });
-  const { data: judgesData } = useQuery({ queryKey: ['ai-judges-list'], queryFn: () => aiJudges.list() });
   const { data: evalPromptsData } = useQuery({ queryKey: ['eval-prompts-list'], queryFn: () => evalPrompts.list() });
   const { data: rubricsData } = useQuery({ queryKey: ['rubrics-list'], queryFn: () => rubrics.list() });
-  const { data: configsData } = useQuery({ queryKey: ['score-configs'], queryFn: () => scoreConfigs.list() });
   const { data: objectivesData } = useQuery({ queryKey: ['objectives'], queryFn: () => objectivesApi.list() });
 
   const createMut = useMutation({
@@ -113,6 +124,12 @@ const Rules: React.FC = () => {
       if (values.config && typeof values.config === 'object') {
         values.config = JSON.stringify(values.config, null, 2);
       }
+      // Transform ai_eval_prompt_id → rating_method
+      if (values.ai_eval_prompt_id) {
+        values.rating_method = `tpl_${values.ai_eval_prompt_id}`;
+      }
+      delete values.ai_eval_prompt_id;
+      delete values.eval_strategy;
       form.setFieldsValue(values);
     } else {
       // New rule: all fields empty
@@ -138,6 +155,8 @@ const Rules: React.FC = () => {
     { title: '#', key: 'index', width: 60, render: (_: any, __: any, i: number) => i + 1 },
     { title: '名称', dataIndex: 'name' },
     { title: '规则类型', dataIndex: 'type', render: (t: string) => { const lt = RULE_TYPES.find(r => r.value === t); return <Tag>{lt?.label || t}</Tag>; } },
+    { title: '打分类型', dataIndex: 'type', width: 130,
+      render: (t: string) => { const dt = RULE_DATA_TYPES[t]; return dt ? <Tag color={dt.color}>{dt.label}</Tag> : '-'; } },
     { title: '阈值', dataIndex: 'threshold', width: 80 },
     { title: '评价目标', dataIndex: 'objectives', width: 200,
       render: (obj: string[]) => obj?.length ? obj.map(o => <Tag key={o}>{o}</Tag>) : '-' },
@@ -170,7 +189,15 @@ const Rules: React.FC = () => {
 
       <Modal title={editing ? '编辑规则' : '新建规则'} open={modalOpen} onCancel={() => setModalOpen(false)}
         onOk={() => form.submit()} width={720}>
-        <Form form={form} layout="vertical" onFinish={(v) => createMut.mutate(v)}>
+        <Form form={form} layout="vertical" onFinish={(v) => {
+          // Transform rating_method → ai_eval_prompt_id
+          if (v.rating_method && v.rating_method.startsWith('tpl_')) {
+            v.ai_eval_prompt_id = v.rating_method.replace('tpl_', '');
+          }
+          delete v.eval_strategy;
+          delete v.rating_method;
+          createMut.mutate(v);
+        }}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="description" label="描述">
             <Input.TextArea rows={2} placeholder="规则的作用和适用场景说明" />
@@ -179,40 +206,52 @@ const Rules: React.FC = () => {
             <Select options={RULE_TYPES} onChange={handleTypeChange} placeholder="请选择规则类型" />
           </Form.Item>
 
-          {/* Show ScoreConfig for all rule types */}
-          <Form.Item name="score_config_id" label="评分配置模板">
-            <Select
-              placeholder="选择分数类型约束(可选)"
-              allowClear
-              options={(configsData || []).map((c: any) => ({
-                value: c.id,
-                label: `${c.name} (${c.data_type})`,
-              }))}
-            />
-          </Form.Item>
+          {selectedType && (() => {
+            const dt = RULE_DATA_TYPES[selectedType];
+            return dt ? (
+              <div style={{ marginBottom: 16, padding: '8px 12px', background: '#f6f8fa', borderRadius: 6, fontSize: 13 }}>
+                <span style={{ color: '#555' }}>打分类型: </span>
+                <Tag color={dt.color}>{dt.label}</Tag>
+              </div>
+            ) : null;
+          })()}
 
           {/* AI Judge fields - only visible for AI rule types */}
           {isAiType && (
             <>
-              <Form.Item name="ai_judge_model_id" label="AI 评估模型" rules={[{ required: true }]}>
-                <Select placeholder="选择 AI 评估模型"
-                  options={(judgesData || []).map((j: any) => ({ value: j.id, label: `${j.name} (${j.model_name})` }))} />
-              </Form.Item>
-              <Form.Item name="ai_eval_prompt_id" label="评估提示词模板">
-                <Select placeholder="选择评估提示词模板(可选)" allowClear
-                  options={(evalPromptsData || []).map((p: any) => ({ value: p.id, label: `${p.name} (${p.strategy})` }))} />
-              </Form.Item>
-              <Form.Item name="eval_strategy" label="评估策略">
-                <Select placeholder="选择评估策略(可选，覆盖模板默认)" allowClear
-                  options={[
-                    { value: 'simple', label: '通用评分 (Simple)' },
-                    { value: 'reference', label: '参照对比 (Reference)' },
-                    { value: 'rubric', label: '多维度评分 (Rubric)' },
-                    { value: 'chain_of_thought', label: '思维链评分 (Chain-of-Thought)' },
-                    { value: 'few_shot', label: '少样本评分 (Few-Shot)' },
-                    { value: 'pairwise', label: '对比选择 (Pairwise)' },
-                  ]} />
-              </Form.Item>
+              {(() => {
+                // Build template options grouped by type, sorted by seq
+                const builtinPrompts = (evalPromptsData || [])
+                  .filter((p: any) => p.is_builtin)
+                  .sort((a: any, b: any) => (a.seq || 99) - (b.seq || 99));
+                const customPrompts = (evalPromptsData || [])
+                  .filter((p: any) => !p.is_builtin)
+                  .sort((a: any, b: any) => (a.seq || 999) - (b.seq || 999));
+                const options: any[] = [];
+                if (builtinPrompts.length > 0) {
+                  options.push({
+                    label: '🔵 默认模板',
+                    options: builtinPrompts.map((p: any) => ({
+                      value: `tpl_${p.id}`,
+                      label: `#${p.seq} ${p.name} (${p.strategy})`,
+                    })),
+                  });
+                }
+                if (customPrompts.length > 0) {
+                  options.push({
+                    label: '🟢 自定义模板',
+                    options: customPrompts.map((p: any) => ({
+                      value: `tpl_${p.id}`,
+                      label: `#${p.seq} ${p.name} (${p.strategy})`,
+                    })),
+                  });
+                }
+                return (
+                  <Form.Item name="rating_method" label="评分方式">
+                    <Select placeholder="请选择提示词模板" options={options} />
+                  </Form.Item>
+                );
+              })()}
               {selectedType === 'llm_judge_rubric' && (
                 <Form.Item name="ai_rubric_id" label="评分维度模板" rules={[{ required: true }]}>
                   <Select placeholder="选择评分维度模板"

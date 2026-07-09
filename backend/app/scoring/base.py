@@ -15,6 +15,10 @@ class BaseScorer(ABC):
     def rule_type(self) -> str:
         """Unique rule type identifier."""
 
+    # Scoring data type: NUMERIC / BOOLEAN / CATEGORICAL
+    # Determines how score is computed, aggregated, and displayed.
+    score_data_type: str = "NUMERIC"
+
     @abstractmethod
     async def score(self, ctx: ScoringContext) -> ScoreResult:
         """Evaluate a single test case against this rule."""

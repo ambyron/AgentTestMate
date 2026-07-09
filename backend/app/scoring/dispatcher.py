@@ -83,7 +83,9 @@ class RuleDispatcher:
                 error=f"No scorer registered for rule_type '{rule_type}'",
             )
         try:
-            return await scorer.score(ctx)
+            result = await scorer.score(ctx)
+            result.data_type = getattr(scorer, "score_data_type", "NUMERIC")
+            return result
         except Exception as e:
             return ScoreResult(
                 rule_id=ctx.rule_config.get("_rule_id", ""),

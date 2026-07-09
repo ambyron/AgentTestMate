@@ -324,10 +324,20 @@ const TaskDetail: React.FC = () => {
                         }}>
                           <Tag color={rule.passed ? 'success' : 'error'} style={{ marginRight: 0 }}>{rule.name || rule.rule_type}</Tag>
                           <span style={{ color: '#666', fontSize: 12 }}>({rule.rule_type})</span>
-                          <span>得分: <b>{rule.score?.toFixed(2)}</b></span>
-                          <span style={{ color: rule.passed ? '#3f8600' : '#cf1322', fontWeight: 600 }}>
-                            {rule.passed ? 'PASS' : 'FAIL'}
-                          </span>
+                          {rule.data_type === 'BOOLEAN' ? (
+                            <span style={{ color: rule.passed ? '#3f8600' : '#cf1322', fontWeight: 600 }}>
+                              {rule.passed ? '✅ PASS' : '❌ FAIL'}
+                            </span>
+                          ) : rule.data_type === 'CATEGORICAL' ? (
+                            <Tag color="purple">{rule.details?.categorical_value || rule.score?.toFixed(2)}</Tag>
+                          ) : (
+                            <>
+                              <span>得分: <b>{rule.score?.toFixed(2)}</b></span>
+                              <span style={{ color: rule.passed ? '#3f8600' : '#cf1322', fontWeight: 600 }}>
+                                {rule.passed ? 'PASS' : 'FAIL'}
+                              </span>
+                            </>
+                          )}
                           {rule.error && <span style={{ color: '#cf1322', fontSize: 12 }}>错误: {rule.error}</span>}
                         </div>
                       ))}

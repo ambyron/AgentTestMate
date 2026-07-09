@@ -1,6 +1,6 @@
 """EvalPromptTemplate model — structured prompt template for AI evaluation."""
 
-from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, func
+from sqlalchemy import Column, String, Text, Boolean, Integer, DateTime, ForeignKey, func
 from sqlalchemy.dialects.sqlite import JSON
 
 from app.models.base import Base
@@ -10,6 +10,7 @@ class EvalPromptTemplate(Base):
     __tablename__ = "eval_prompt_templates"
 
     id = Column(String(36), primary_key=True)
+    seq = Column(Integer, unique=True, nullable=True)  # 1-100 built-in, 101+ custom
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
 

@@ -10,6 +10,7 @@ from app.scoring import ScoringContext, ScoreResult
 
 class ExactMatchScorer(BaseScorer):
     rule_type = "exact_match"
+    score_data_type = "BOOLEAN"
 
     async def score(self, ctx: ScoringContext) -> ScoreResult:
         case_sensitive = ctx.rule_config.get("case_sensitive", True)
@@ -154,6 +155,7 @@ class KeywordScorer(BaseScorer):
 
 class RegexScorer(BaseScorer):
     rule_type = "regex"
+    score_data_type = "BOOLEAN"
 
     async def score(self, ctx: ScoringContext) -> ScoreResult:
         pattern = ctx.rule_config.get("pattern", "")
@@ -188,6 +190,7 @@ class RegexScorer(BaseScorer):
 
 class DurationScorer(BaseScorer):
     rule_type = "duration"
+    score_data_type = "BOOLEAN"
 
     async def score(self, ctx: ScoringContext) -> ScoreResult:
         max_ms = ctx.rule_config.get("max_ms", 30_000)
@@ -206,17 +209,17 @@ class DurationScorer(BaseScorer):
 
 class LengthScorer(BaseScorer):
     rule_type = "length"
+    score_data_type = "BOOLEAN"
 
     async def score(self, ctx: ScoringContext) -> ScoreResult:
         min_chars = ctx.rule_config.get("min_chars", 0)
         max_chars = ctx.rule_config.get("max_chars", 10_000)
         length = len(ctx.actual_output)
         passed = min_chars <= length <= max_chars
-        ratio = 1.0 if passed else (length / max_chars if length > max_chars else 0.0)
         return ScoreResult(
             rule_id=ctx.rule_config.get("_rule_id", ""),
             rule_type=self.rule_type,
-            score=ratio,
+            score=1.0 if passed else 0.0,
             threshold=ctx.rule_threshold,
             passed=passed,
             details={"length": length, "min_chars": min_chars, "max_chars": max_chars},

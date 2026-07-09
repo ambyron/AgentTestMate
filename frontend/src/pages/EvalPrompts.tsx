@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Tag, Space, message, Popconfirm, Tabs } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, ExperimentOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Select, Tag, Space, message, Popconfirm, Tabs, Descriptions, Typography } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined, ExperimentOutlined, EyeOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { evalPrompts, aiJudges } from '../api/client';
+import { evalPrompts } from '../api/client';
 
 const STRATEGY_OPTIONS = [
   { value: 'simple', label: '通用评分 (Simple)' },
@@ -14,8 +14,20 @@ const STRATEGY_OPTIONS = [
   { value: 'pairwise', label: '对比选择 (Pairwise)' },
 ];
 
+// Built-in template IDs per strategy (for auto-load)
+const BUILTIN_IDS: Record<string, string> = {
+  simple: 'builtin_simple',
+  reference: 'builtin_reference',
+  rubric: 'builtin_rubric',
+  chain_of_thought: 'builtin_cot',
+  few_shot: 'builtin_fewshot',
+  pairwise: 'builtin_pairwise',
+};
+
 const EvalPrompts: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewData, setViewData] = useState<any>(null);
   const [editing, setEditing] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('system');
   const [form] = Form.useForm();
@@ -23,7 +35,6 @@ const EvalPrompts: React.FC = () => {
   const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({ queryKey: ['eval-prompts'], queryFn: () => evalPrompts.list() });
-  const { data: judgesData } = useQuery({ queryKey: ['ai-judges-list'], queryFn: () => aiJudges.list() });
 
   const createMut = useMutation({
     mutationFn: (d: any) => editing ? evalPrompts.update(editing.id, d) : evalPrompts.create(d),
@@ -38,22 +49,52 @@ const EvalPrompts: React.FC = () => {
 
   const selectedStrategy = Form.useWatch('strategy', form);
 
+  /* ─── Open edit/create modal ─── */
   const openEdit = (record?: any) => {
     setEditing(record);
-    const values = record ? { ...record } : { strategy: 'simple', output_format: 'json', version: '1.0' };
-    if (values.few_shot_examples && typeof values.few_shot_examples === 'string') {
-      try { values.few_shot_examples = JSON.parse(values.few_shot_examples); } catch { values.few_shot_examples = []; }
+    if (record) {
+      const values = { ...record };
+      if (values.few_shot_examples && typeof values.few_shot_examples === 'string') {
+        try { values.few_shot_examples = JSON.parse(values.few_shot_examples); } catch { values.few_shot_examples = []; }
+      }
+      if (values.output_schema && typeof values.output_schema === 'string') {
+        try { values.output_schema = JSON.parse(values.output_schema); } catch { values.output_schema = {}; }
+      }
+      form.setFieldsValue(values);
+    } else {
+      form.resetFields();
+      form.setFieldsValue({ strategy: 'simple', output_format: 'json', version: '1.0' });
+      // Auto-load built-in content for the default strategy
+      setTimeout(() => handleStrategyChange('simple'), 100);
     }
-    if (values.output_schema && typeof values.output_schema === 'string') {
-      try { values.output_schema = JSON.parse(values.output_schema); } catch { values.output_schema = {}; }
-    }
-    form.setFieldsValue(values);
     setActiveTab('system');
     setModalOpen(true);
   };
 
+  /* ─── Open view modal (for built-in templates) ─── */
+  const openView = (record: any) => {
+    setViewData(record);
+    setViewOpen(true);
+  };
+
+  /* ─── Auto-load builtin template content on strategy change ─── */
+  const handleStrategyChange = (strategy: string) => {
+    if (editing) return;  // Only for new templates
+    const builtinId = BUILTIN_IDS[strategy];
+    if (!builtinId || !data) return;
+    const builtin = (data || []).find((t: any) => t.id === builtinId);
+    if (!builtin) return;
+    form.setFieldsValue({
+      system_prompt: builtin.system_prompt || '',
+      user_prompt_template: builtin.user_prompt_template || builtin.template_content || '',
+      output_schema: builtin.output_schema || '',
+      few_shot_examples: builtin.few_shot_examples || [],
+      tags: builtin.tags || [],
+    });
+  };
+
   const columns = [
-    { title: '#', key: 'index', width: 60, render: (_: any, __: any, i: number) => i + 1 },
+    { title: '#', dataIndex: 'seq', width: 60, sorter: (a: any, b: any) => (a.seq || 999) - (b.seq || 999) },
     { title: '名称', dataIndex: 'name', ellipsis: true },
     { title: '策略', dataIndex: 'strategy', width: 160,
       render: (s: string) => {
@@ -63,16 +104,25 @@ const EvalPrompts: React.FC = () => {
     },
     { title: '版本', dataIndex: 'version', width: 80 },
     { title: '输出格式', dataIndex: 'output_format', width: 100 },
-    { title: '内置', dataIndex: 'is_builtin', width: 60, render: (v: boolean) => v ? <Tag color="blue">是</Tag> : '-' },
     {
-      title: '操作', width: 200,
+      title: '类型', dataIndex: 'is_builtin', width: 80,
+      render: (v: boolean) => v ? <Tag color="blue">内置</Tag> : <Tag color="green">自定义</Tag>,
+    },
+    {
+      title: '操作', width: 220,
       render: (_: any, r: any) => (
         <Space>
           <Button size="small" icon={<ExperimentOutlined />} onClick={() => navigate(`/eval-prompts/test?promptId=${r.id}`)}>测试</Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} />
-          <Popconfirm title="确定删除?" onConfirm={() => deleteMut.mutate(r.id)}>
-            <Button size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          {r.is_builtin ? (
+            <Button size="small" icon={<EyeOutlined />} onClick={() => openView(r)}>查看</Button>
+          ) : (
+            <>
+              <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} />
+              <Popconfirm title="确定删除?" onConfirm={() => deleteMut.mutate(r.id)}>
+                <Button size="small" danger icon={<DeleteOutlined />} />
+              </Popconfirm>
+            </>
+          )}
         </Space>
       ),
     },
@@ -103,7 +153,7 @@ const EvalPrompts: React.FC = () => {
           <Form.Item name="description" label="描述"><Input.TextArea rows={2} /></Form.Item>
           <Space style={{ width: '100%' }} size={16}>
             <Form.Item name="strategy" label="评估策略" rules={[{ required: true }]}>
-              <Select options={STRATEGY_OPTIONS} style={{ width: 240 }} />
+              <Select options={STRATEGY_OPTIONS} style={{ width: 240 }} onChange={handleStrategyChange} />
             </Form.Item>
             <Form.Item name="version" label="版本"><Input style={{ width: 80 }} /></Form.Item>
             <Form.Item name="output_format" label="输出格式">
@@ -143,6 +193,34 @@ const EvalPrompts: React.FC = () => {
             </Tabs.TabPane>
           </Tabs>
         </Form>
+      </Modal>
+
+      {/* ─── View modal (for built-in templates) ─── */}
+      <Modal title="查看提示词模板" open={viewOpen} onCancel={() => setViewOpen(false)}
+        footer={<Button onClick={() => setViewOpen(false)}>关闭</Button>} width={800}>
+        {viewData && (
+          <div>
+            <Descriptions column={2} bordered size="small" style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="名称">{viewData.name}</Descriptions.Item>
+              <Descriptions.Item label="策略">
+                {(() => { const opt = STRATEGY_OPTIONS.find(o => o.value === viewData.strategy); return opt?.label || viewData.strategy; })()}
+              </Descriptions.Item>
+              <Descriptions.Item label="版本">{viewData.version}</Descriptions.Item>
+              <Descriptions.Item label="输出格式">{viewData.output_format}</Descriptions.Item>
+              <Descriptions.Item label="类型" span={2}>
+                <Tag color="blue">内置</Tag>
+              </Descriptions.Item>
+            </Descriptions>
+            <Typography.Text strong style={{ display: 'block', marginBottom: 4 }}>System Prompt</Typography.Text>
+            <div style={{ padding: 12, background: '#f6f8fa', borderRadius: 6, marginBottom: 16, whiteSpace: 'pre-wrap', fontSize: 13 }}>
+              {viewData.system_prompt || '(无)'}
+            </div>
+            <Typography.Text strong style={{ display: 'block', marginBottom: 4 }}>User Prompt (Jinja2)</Typography.Text>
+            <div style={{ padding: 12, background: '#f6f8fa', borderRadius: 6, whiteSpace: 'pre-wrap', fontSize: 13, maxHeight: 300, overflow: 'auto' }}>
+              {viewData.user_prompt_template || viewData.template_content || '(无)'}
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

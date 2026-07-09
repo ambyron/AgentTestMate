@@ -227,13 +227,16 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                 if ow.threshold is not None:
                     objective_thresholds[ow.objective] = ow.threshold
 
-            # Build rule → objectives map
+            # Build rule → objectives map + all_rule_objectives (union)
             rule_objective_map: dict[str, list[str]] = {}
             rule_name_map: dict[str, str] = {}
+            all_rule_objectives_set: set[str] = set()
             for r in all_rules:
                 if r.objectives:
                     rule_objective_map[r.id] = r.objectives
+                    all_rule_objectives_set.update(r.objectives)
                 rule_name_map[r.id] = r.name
+            all_rule_objectives = list(all_rule_objectives_set)
 
             # Build case info lookup
             case_info_map: dict[str, dict] = {}
@@ -349,6 +352,7 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                             objective_weights=objective_weights,
                             objective_thresholds=objective_thresholds,
                             global_threshold=float((task.config or {}).get("global_threshold", 0.7)),
+                            all_rule_objectives=all_rule_objectives,
                         )
 
                         passed = aggregated.passed
@@ -384,6 +388,7 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                                 {"rule_id": sr.rule_id, "rule_type": sr.rule_type,
                                  "name": rule_name_map.get(sr.rule_id, sr.rule_type),
                                  "score": sr.score, "passed": sr.passed,
+                                 "data_type": sr.data_type,
                                  "details": sr.details, "error": sr.error}
                                 for sr in score_results
                             ],

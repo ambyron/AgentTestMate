@@ -28,7 +28,7 @@ def _seed_builtin_prompts(sync_conn):
     _empty_json = _json.dumps([])
     builtins = [
         {
-            "id": "builtin_simple", "name": "通用评分 (默认)", "description": "通用 AI 评估评分模板",
+            "seq": 1, "id": "builtin_simple", "name": "通用评分 (默认)", "description": "通用 AI 评估评分模板",
             "strategy": "simple", "is_builtin": 1, "version": "1.0",
             "system_prompt": "You are an expert AI evaluation judge. Assess the quality of the AI's response based on accuracy, completeness, and clarity.",
             "user_prompt_template": (
@@ -44,7 +44,7 @@ def _seed_builtin_prompts(sync_conn):
             "created_at": now, "updated_at": now,
         },
         {
-            "id": "builtin_reference", "name": "参照对比 (默认)", "description": "基于预期输出进行参照对比评分",
+            "seq": 2, "id": "builtin_reference", "name": "参照对比 (默认)", "description": "基于预期输出进行参照对比评分",
             "strategy": "reference", "is_builtin": 1, "version": "1.0",
             "system_prompt": "You are an expert AI evaluation judge. Compare the actual output with the expected output (reference).",
             "user_prompt_template": (
@@ -66,7 +66,7 @@ def _seed_builtin_prompts(sync_conn):
             "created_at": now, "updated_at": now,
         },
         {
-            "id": "builtin_rubric", "name": "多维度评分 (默认)", "description": "按评分维度逐一打分",
+            "seq": 3, "id": "builtin_rubric", "name": "多维度评分 (默认)", "description": "按评分维度逐一打分",
             "strategy": "rubric", "is_builtin": 1, "version": "1.0",
             "system_prompt": "You are an expert AI evaluation judge. Score the response using the provided rubric dimensions.",
             "user_prompt_template": (
@@ -87,7 +87,7 @@ def _seed_builtin_prompts(sync_conn):
             "created_at": now, "updated_at": now,
         },
         {
-            "id": "builtin_cot", "name": "思维链评分 (默认)", "description": "逐步推理后再给出评分",
+            "seq": 4, "id": "builtin_cot", "name": "思维链评分 (默认)", "description": "逐步推理后再给出评分",
             "strategy": "chain_of_thought", "is_builtin": 1, "version": "1.0",
             "system_prompt": "You are an expert AI evaluation judge. Before giving the final score, reason step-by-step.",
             "user_prompt_template": (
@@ -107,7 +107,7 @@ def _seed_builtin_prompts(sync_conn):
             "created_at": now, "updated_at": now,
         },
         {
-            "id": "builtin_fewshot", "name": "少样本评分 (默认)", "description": "参考示例进行评分",
+            "seq": 5, "id": "builtin_fewshot", "name": "少样本评分 (默认)", "description": "参考示例进行评分",
             "strategy": "few_shot", "is_builtin": 1, "version": "1.0",
             "system_prompt": "You are an expert AI evaluation judge. Use the provided examples to guide your scoring.",
             "user_prompt_template": (
@@ -135,7 +135,7 @@ def _seed_builtin_prompts(sync_conn):
             "created_at": now, "updated_at": now,
         },
         {
-            "id": "builtin_pairwise", "name": "对比选择 (默认)", "description": "比较两个回复选择更好的",
+            "seq": 6, "id": "builtin_pairwise", "name": "对比选择 (默认)", "description": "比较两个回复选择更好的",
             "strategy": "pairwise", "is_builtin": 1, "version": "1.0",
             "system_prompt": "You are an expert AI evaluation judge. Compare two AI responses and choose the better one.",
             "user_prompt_template": (
@@ -261,6 +261,28 @@ async def lifespan(app: FastAPI):
                     sync_conn.execute(text("ALTER TABLE eval_prompt_templates ADD COLUMN output_schema JSON"))
                 if "few_shot_examples" not in columns:
                     sync_conn.execute(text("ALTER TABLE eval_prompt_templates ADD COLUMN few_shot_examples JSON"))
+                if "seq" not in columns:
+                    sync_conn.execute(text("ALTER TABLE eval_prompt_templates ADD COLUMN seq INTEGER"))
+                # Assign seq for existing built-in prompts
+                seq_assign = sync_conn.execute(text("SELECT COUNT(*) FROM eval_prompt_templates WHERE seq IS NULL AND is_builtin = 1")).scalar()
+                if seq_assign > 0:
+                    sync_conn.execute(text("""
+                        UPDATE eval_prompt_templates SET seq = CASE id
+                            WHEN 'builtin_simple' THEN 1
+                            WHEN 'builtin_reference' THEN 2
+                            WHEN 'builtin_rubric' THEN 3
+                            WHEN 'builtin_cot' THEN 4
+                            WHEN 'builtin_fewshot' THEN 5
+                            WHEN 'builtin_pairwise' THEN 6
+                        END WHERE id IN ('builtin_simple','builtin_reference','builtin_rubric','builtin_cot','builtin_fewshot','builtin_pairwise')
+                    """))
+                # Assign seq for custom templates (101+)
+                custom_count = sync_conn.execute(text("SELECT COUNT(*) FROM eval_prompt_templates WHERE seq IS NULL AND (is_builtin IS NULL OR is_builtin = 0)")).scalar()
+                if custom_count > 0:
+                    sync_conn.execute(text("""
+                        UPDATE eval_prompt_templates SET seq = 100 + rowid
+                        WHERE seq IS NULL AND (is_builtin IS NULL OR is_builtin = 0)
+                    """))
                 if "tags" not in columns:
                     sync_conn.execute(text("ALTER TABLE eval_prompt_templates ADD COLUMN tags JSON"))
 
@@ -269,13 +291,21 @@ async def lifespan(app: FastAPI):
                 if count == 0:
                     _seed_builtin_prompts(sync_conn)
 
-            # Auto-create a default ScoreConfig for existing rules
+            # Auto-create default ScoreConfigs for all three scoring types
             if "score_configs" in table_names:
                 count = sync_conn.execute(text("SELECT COUNT(*) FROM score_configs")).scalar()
                 if count == 0:
                     sync_conn.execute(text("""
                         INSERT INTO score_configs (id, name, description, data_type, min_value, max_value)
-                        VALUES ('default_numeric', '默认数值评分', '自动创建的默认评分配置', 'NUMERIC', 0.0, 1.0)
+                        VALUES ('default_numeric', '默认数值评分', '数值评分 0.0~1.0', 'NUMERIC', 0.0, 1.0)
+                    """))
+                    sync_conn.execute(text("""
+                        INSERT INTO score_configs (id, name, description, data_type, min_value, max_value)
+                        VALUES ('default_boolean', '默认布尔评分', '布尔评分 通过/不通过', 'BOOLEAN', 0.0, 1.0)
+                    """))
+                    sync_conn.execute(text("""
+                        INSERT INTO score_configs (id, name, description, data_type)
+                        VALUES ('default_categorical', '默认分类评分', '分类评分 优/良/中/差', 'CATEGORICAL')
                     """))
                     # Link existing rules to default ScoreConfig
                     if "rules" in table_names:
