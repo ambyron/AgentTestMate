@@ -20,7 +20,10 @@ _dispatcher.register_builtins()
 @rules_router.post("")
 async def create_rule(data: dict, db: AsyncSession = Depends(get_db),
                       current_space: str | None = Depends(get_current_space)):
-    # Normalize config & objectives: ensure stored as dict/list, not JSON string
+    # Handle objectives first: plain string (from single Select) → wrap in list
+    if isinstance(data.get("objectives"), str) and not data["objectives"].startswith("["):
+        data["objectives"] = [data["objectives"]]
+    # Normalize config & objectives JSON strings (e.g. from import)
     import json as _json
     for field in ("config", "objectives"):
         if isinstance(data.get(field), str):
@@ -28,9 +31,6 @@ async def create_rule(data: dict, db: AsyncSession = Depends(get_db),
                 data[field] = _json.loads(data[field])
             except (_json.JSONDecodeError, TypeError):
                 data[field] = {} if field == "config" else []
-    # Ensure objectives is always a list (single selection from frontend)
-    if "objectives" in data and not isinstance(data["objectives"], list):
-        data["objectives"] = [data["objectives"]]
     if current_space:
         data["space_id"] = current_space
     return await repo.create_rule(db, data)
@@ -69,6 +69,9 @@ async def update_rule(rule_id: str, data: dict, db: AsyncSession = Depends(get_d
                        current_space: str | None = Depends(get_current_space)):
     if not await repo.verify_space_access(db, repo.Rule, rule_id, current_space, current_user.role):
         raise HTTPException(403, "Access denied")
+    # Handle objectives first: plain string (from single Select) → wrap in list
+    if isinstance(data.get("objectives"), str) and not data["objectives"].startswith("["):
+        data["objectives"] = [data["objectives"]]
     import json as _json
     for field in ("config", "objectives"):
         if isinstance(data.get(field), str):
@@ -76,8 +79,6 @@ async def update_rule(rule_id: str, data: dict, db: AsyncSession = Depends(get_d
                 data[field] = _json.loads(data[field])
             except (_json.JSONDecodeError, TypeError):
                 data[field] = {} if field == "config" else []
-    if "objectives" in data and not isinstance(data["objectives"], list):
-        data["objectives"] = [data["objectives"]]
     rule = await repo.update_rule(db, rule_id, data)
     if not rule:
         raise HTTPException(404, "Rule not found")
