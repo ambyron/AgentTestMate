@@ -132,6 +132,7 @@ async def start_task(task_id: str, background_tasks: BackgroundTasks, db: AsyncS
         "started_at": datetime.now(timezone.utc),
         "progress": {"total": 0, "completed": 0, "failed": 0, "passed": 0},
     })
+    await db.commit()
 
     # Launch background execution
     background_tasks.add_task(_execute_task, task_id, engine)
