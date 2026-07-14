@@ -80,7 +80,7 @@ async def check_agent(agent_id: str, db: AsyncSession = Depends(get_db),
         "auth_type": agent.auth_type,
         "auth_credentials": agent.auth_credentials or "",
     }
-    result = await invoker.invoke(agent_cfg, "ping", timeout_ms=10_000)
+    result = await invoker.invoke(agent_cfg, "ping", timeout_ms=agent.timeout_ms or 30_000)
     return {
         "reachable": result.error is None,
         "status_code": result.status_code,

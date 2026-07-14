@@ -16,7 +16,8 @@ class AIJudgeModel(Base):
     api_base_url = Column(String(2048), nullable=False)
     auth_type = Column(String(20), nullable=False, default="api_key")
     auth_credentials = Column(Text, nullable=True)  # encrypted
-    parameters = Column(JSON, nullable=False, default={})
+    headers_template = Column(JSON, nullable=True)  # custom HTTP headers for enterprise gateways
+    parameters = Column(JSON, nullable=False, default={})  # temperature, max_tokens, etc.
     status = Column(String(20), nullable=False, default="active")  # active / inactive
     space_id = Column(String(36), ForeignKey("spaces.id"), nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())

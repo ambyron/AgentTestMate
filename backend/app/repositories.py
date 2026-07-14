@@ -32,7 +32,7 @@ def _filter_fields(data: dict, allowed: set[str]) -> dict:
 # ── Per-model field allowlists (Mass Assignment protection) ────
 
 _AGENT_FIELDS = {"name", "description", "api_base_url", "method", "headers_template",
-                 "body_template", "auth_type", "auth_credentials", "status"}
+                 "body_template", "auth_type", "auth_credentials", "status", "timeout_ms"}
 _DATASET_FIELDS = {"name", "description", "dataset_type", "tags"}
 _TESTCASE_FIELDS = {"case_id", "input", "expected_output", "objectives", "tags", "rule_refs", "sort_order"}
 _RULE_FIELDS = {"name", "description", "type", "config", "objectives",
@@ -41,7 +41,7 @@ _RULE_FIELDS = {"name", "description", "type", "config", "objectives",
 _SCORE_CONFIG_FIELDS = {"name", "description", "data_type", "min_value", "max_value", "categories", "default"}
 _OBJECTIVE_FIELDS = {"name", "description", "default_weight"}
 _AI_JUDGE_FIELDS = {"name", "provider", "model_name", "api_base_url", "auth_type",
-                    "auth_credentials", "parameters", "status"}
+                    "auth_credentials", "headers_template", "parameters", "status"}
 _EVAL_PROMPT_FIELDS = {"name", "description", "strategy", "system_prompt", "user_prompt_template",
                        "template_content", "output_schema", "few_shot_examples", "variables", "tags"}
 _RUBRIC_FIELDS = {"name", "description"}

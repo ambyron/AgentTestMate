@@ -36,6 +36,13 @@ const Tasks: React.FC = () => {
     return Array.from(objSet);
   }, [watchedRuleIds, rulesData]);
 
+  // Check if any selected rule is an AI-type rule
+  const hasAiRule = useMemo(() => {
+    const ruleIds = watchedRuleIds || [];
+    if (!ruleIds.length || !rulesData) return false;
+    return rulesData.some((r: any) => ruleIds.includes(r.id) && r.type.startsWith('llm_judge'));
+  }, [watchedRuleIds, rulesData]);
+
   // Sync objectiveConfigs when selectedObjectives change
   useEffect(() => {
     setObjectiveConfigs(prev => {
@@ -176,10 +183,12 @@ const Tasks: React.FC = () => {
               </div>
             </>
           )}
-          <Form.Item name="ai_scoring_config" label="AI 评分配置">
-            <Select mode="multiple" placeholder="选择 AI 评估模型(可选)"
-              options={(aiJudgesData || []).map((j: any) => ({ value: j.id, label: `${j.name} (${j.model_name})` }))} />
-          </Form.Item>
+          {hasAiRule && (
+            <Form.Item name="ai_scoring_config" label="AI 评估模型">
+              <Select mode="multiple" placeholder="选择 AI 评估模型(可选)"
+                options={(aiJudgesData || []).map((j: any) => ({ value: j.id, label: `${j.name} (${j.model_name})` }))} />
+            </Form.Item>
+          )}
           <Space style={{ width: '100%' }} align="baseline" wrap>
             <Form.Item name="concurrency" label="并发度" initialValue={5}><InputNumber min={1} max={100} /></Form.Item>
             <Form.Item name="timeout_ms" label="超时(ms)" initialValue={30000}><InputNumber min={1000} max={600000} step={1000} /></Form.Item>

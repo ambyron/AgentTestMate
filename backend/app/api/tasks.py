@@ -189,10 +189,9 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
             except ImportError:
                 pass
 
-            # Pre-load AI judge resources (prompt templates + judge models) for AI-type rules
+            # Pre-load AI judge resources (prompt templates) for AI-type rules
             from app.models import EvalPromptTemplate, AIJudgeModel, ScoringRubric
             prompt_ids = {r.ai_eval_prompt_id for r in all_rules if r.ai_eval_prompt_id}
-            judge_ids = {r.ai_judge_model_id for r in all_rules if r.ai_judge_model_id}
             rubric_ids = {r.ai_rubric_id for r in all_rules if r.ai_rubric_id}
 
             prompt_map: dict[str, EvalPromptTemplate] = {}
@@ -202,10 +201,12 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                 )).scalars().all()
                 prompt_map = {r.id: r for r in rows}
 
+            # Judge models loaded from task-level ai_scoring_config
             judge_map: dict[str, AIJudgeModel] = {}
-            if judge_ids:
+            task_ai_config = task.ai_scoring_config or []
+            if isinstance(task_ai_config, list) and len(task_ai_config) > 0:
                 rows = (await db.execute(
-                    select(AIJudgeModel).where(AIJudgeModel.id.in_(judge_ids))
+                    select(AIJudgeModel).where(AIJudgeModel.id.in_(task_ai_config))
                 )).scalars().all()
                 judge_map = {r.id: r for r in rows}
 
@@ -306,18 +307,18 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                                 "llm_judge_rubric": "rubric",
                             }.get(rule.type, "simple")
 
-                            # Resolve prompt template for AI-type rules
+                            # Resolve prompt template for AI-type rules (rule-level)
                             _prompt_tpl = prompt_map.get(rule.ai_eval_prompt_id) if rule.ai_eval_prompt_id else None
-                            _judge_model = judge_map.get(rule.ai_judge_model_id) if rule.ai_judge_model_id else None
                             _rubric = rubric_map.get(rule.ai_rubric_id) if rule.ai_rubric_id else None
 
+                            # Judge model from task-level ai_scoring_config
                             _judge_models: dict = {}
-                            if _judge_model:
-                                _judge_models[_judge_model.id] = {
-                                    "provider": _judge_model.provider,
-                                    "model_name": _judge_model.model_name,
-                                    "api_base_url": _judge_model.api_base_url,
-                                    "auth_credentials": _judge_model.auth_credentials or "",
+                            for _jm in judge_map.values():
+                                _judge_models[_jm.id] = {
+                                    "provider": _jm.provider,
+                                    "model_name": _jm.model_name,
+                                    "api_base_url": _jm.api_base_url,
+                                    "auth_credentials": _jm.auth_credentials or "",
                                 }
 
                             ctx = ScoringContext(
@@ -342,6 +343,8 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                                 judge_models=_judge_models or None,
                                 # Rubric text
                                 rubric_text=_rubric.description if _rubric else None,
+                                # Criteria from rule config
+                                criteria=raw_config.get("criteria", ""),
                             )
                             sr = await dispatcher.evaluate(ctx, rule.type)
                             score_results.append(sr)

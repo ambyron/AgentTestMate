@@ -246,6 +246,12 @@ async def lifespan(app: FastAPI):
                     )
                 """))
 
+            # Migrate ai_judge_models: add headers_template column
+            if "ai_judge_models" in table_names:
+                cols = [c["name"] for c in inspector.get_columns("ai_judge_models") if c["name"] in ("headers_template",)]
+                if "headers_template" not in cols:
+                    sync_conn.execute(text("ALTER TABLE ai_judge_models ADD COLUMN headers_template JSON"))
+
             # Migrate eval_prompt_templates: add new columns
             if "eval_prompt_templates" in table_names:
                 columns = [c["name"] for c in inspector.get_columns("eval_prompt_templates")]
