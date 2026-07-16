@@ -156,19 +156,4 @@ class LLMJudgeScorer(BaseScorer):
         )
 
 
-# ── Backward compatibility shims ───────────────────────────────────────────
 
-class LLMJudgeRefScorer(LLMJudgeScorer):
-    """Deprecated: use LLMJudgeScorer with strategy='reference'."""
-
-    @property
-    def rule_type(self) -> str:
-        return "llm_judge_ref"
-
-
-class LLMJudgeRubricScorer(LLMJudgeScorer):
-    """Deprecated: use LLMJudgeScorer with strategy='rubric'."""
-
-    @property
-    def rule_type(self) -> str:
-        return "llm_judge_rubric"

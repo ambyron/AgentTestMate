@@ -11,11 +11,9 @@ const RULE_TYPES = [
   { value: 'duration', label: '响应时间', category: 'builtin' },
   { value: 'length', label: '长度约束', category: 'builtin' },
   { value: 'llm_judge', label: 'AI 模型评分', category: 'ai' },
-  { value: 'llm_judge_ref', label: 'AI 参照答案评分', category: 'ai' },
-  { value: 'llm_judge_rubric', label: '多维度 AI 评分', category: 'ai' },
 ];
 
-const AI_RULE_TYPES = ['llm_judge', 'llm_judge_ref', 'llm_judge_rubric'];
+const AI_RULE_TYPES = ['llm_judge'];
 
 /* ─── Rule type → scoring data type mapping ─── */
 const RULE_DATA_TYPES: Record<string, { label: string; color: string }> = {
@@ -25,8 +23,6 @@ const RULE_DATA_TYPES: Record<string, { label: string; color: string }> = {
   duration: { label: 'BOOLEAN', color: 'green' },
   length: { label: 'BOOLEAN', color: 'green' },
   llm_judge: { label: 'NUMERIC', color: 'blue' },
-  llm_judge_ref: { label: 'NUMERIC', color: 'blue' },
-  llm_judge_rubric: { label: 'NUMERIC', color: 'blue' },
 };
 
 
@@ -65,14 +61,6 @@ const CONFIG_TEMPLATES: Record<string, ConfigTemplate> = {
   llm_judge: {
     template: JSON.stringify({ criteria: '' }, null, 2),
     description: 'criteria (string): AI 评分准则，描述期望从哪些维度评估回复质量',
-  },
-  llm_judge_ref: {
-    template: JSON.stringify({ criteria: '' }, null, 2),
-    description: 'criteria (string): AI 评分准则，描述如何对比实际输出与期望输出',
-  },
-  llm_judge_rubric: {
-    template: JSON.stringify({ criteria: '' }, null, 2),
-    description: 'criteria (string): AI 评分准则，描述各评分维度的打分标准',
   },
 };
 
@@ -190,12 +178,14 @@ const Rules: React.FC = () => {
       <Modal title={editing ? '编辑规则' : '新建规则'} open={modalOpen} onCancel={() => setModalOpen(false)}
         onOk={() => form.submit()} width={720}>
         <Form form={form} layout="vertical" onFinish={(v) => {
+          console.log('[DEBUG] 提交的表单数据:', JSON.stringify(v, null, 2));
           // Transform rating_method → ai_eval_prompt_id
           if (v.rating_method && v.rating_method.startsWith('tpl_')) {
             v.ai_eval_prompt_id = v.rating_method.replace('tpl_', '');
           }
           delete v.eval_strategy;
           delete v.rating_method;
+          console.log('[DEBUG] 转换后的提交数据:', JSON.stringify(v, null, 2));
           createMut.mutate(v);
         }}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
@@ -251,13 +241,7 @@ const Rules: React.FC = () => {
                     <Select placeholder="请选择提示词模板" options={options} />
                   </Form.Item>
                 );
-              })()}
-              {selectedType === 'llm_judge_rubric' && (
-                <Form.Item name="ai_rubric_id" label="评分维度模板" rules={[{ required: true }]}>
-                  <Select placeholder="选择评分维度模板"
-                    options={(rubricsData || []).map((r: any) => ({ value: r.id, label: r.name }))} />
-                </Form.Item>
-              )}
+              })(          )}
             </>
           )}
 

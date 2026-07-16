@@ -180,14 +180,9 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                 all_rules = await repo.list_rules(db, enabled=True)
             dispatcher = RuleDispatcher()
             dispatcher.register_builtins()
-            # Register AI judge scorers if available
-            try:
-                from app.judge.scorer import LLMJudgeScorer, LLMJudgeRefScorer, LLMJudgeRubricScorer
-                dispatcher.register(LLMJudgeScorer())
-                dispatcher.register(LLMJudgeRefScorer())
-                dispatcher.register(LLMJudgeRubricScorer())
-            except ImportError:
-                pass
+            # Register AI judge scorer
+            from app.judge.scorer import LLMJudgeScorer
+            dispatcher.register(LLMJudgeScorer())
 
             # Pre-load AI judge resources (prompt templates) for AI-type rules
             from app.models import EvalPromptTemplate, AIJudgeModel, ScoringRubric
