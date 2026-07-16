@@ -174,7 +174,7 @@ async def list_datasets(dataset_type: str | None = None, search: str | None = No
 
 
 @router.get("/{dataset_id}")
-async def get_dataset(dataset_id: str, page: int = 1, size: int = 50,
+async def get_dataset(dataset_id: str, page: int = 1, size: int = 1000,
                       db: AsyncSession = Depends(get_db),
                       current_user: User = Depends(get_current_user),
                       current_space: str | None = Depends(get_current_space)):
