@@ -145,8 +145,8 @@ const Tasks: React.FC = () => {
             <Select mode="multiple" placeholder="选择数据集"
               options={(datasetsData || []).map((d: any) => ({ value: d.id, label: d.name }))} />
           </Form.Item>
-          <Form.Item name="rule_ids" label="使用评估规则">
-            <Select mode="multiple" placeholder="选择评估规则(可选，不选则使用所有已启用规则)"
+          <Form.Item name="rule_ids" label="使用评估规则" rules={[{ required: true, message: '请至少选择一条评估规则' }]}>
+            <Select mode="multiple" placeholder="选择评估规则"
               onChange={() => {
                 // Force re-render of selectedObjectives on next tick
                 setObjectiveConfigs(prev => ({ ...prev }));
