@@ -310,9 +310,9 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                             _judge_models: dict = {}
                             for _jm in judge_map.values():
                                 _judge_models[_jm.id] = {
-                                    "provider": _jm.provider,
-                                    "model_name": _jm.model_name,
-                                    "api_base_url": _jm.api_base_url,
+                                    "provider": _jm.provider or "openai",
+                                    "model_name": _jm.model_name or "gpt-4o",
+                                    "api_base_url": _jm.api_base_url or "",
                                     "auth_credentials": _jm.auth_credentials or "",
                                 }
 

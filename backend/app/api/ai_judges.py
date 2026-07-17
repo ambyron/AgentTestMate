@@ -72,10 +72,24 @@ async def check_ai_judge(judge_id: str, db: AsyncSession = Depends(get_db),
 
     from app.judge import ModelRouter
     router = ModelRouter()
+
+    # Validate required fields before calling
+    missing = []
+    if not judge.api_base_url:
+        missing.append("api_base_url")
+    if not judge.auth_credentials:
+        missing.append("auth_credentials (API Key)")
+    if missing:
+        return {
+            "reachable": False,
+            "response": None,
+            "error": f"配置不完整，缺少字段: {', '.join(missing)}",
+        }
+
     model_cfg = {
-        "provider": judge.provider,
-        "model_name": judge.model_name,
-        "api_base_url": judge.api_base_url,
+        "provider": judge.provider or "openai",
+        "model_name": judge.model_name or "gpt-4o",
+        "api_base_url": judge.api_base_url.rstrip("/"),
         "auth_credentials": judge.auth_credentials or "",
     }
     result = await router.invoke(model_cfg, "Reply with OK if you receive this.", {"max_tokens": 10})

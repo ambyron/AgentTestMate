@@ -102,9 +102,9 @@ class OpenAIAdapter(ModelAdapter):
     async def invoke(self, model_cfg: dict, prompt: str, params: dict) -> JudgeResponse:
         import time
         start = time.monotonic()
-        api_key = model_cfg.get("auth_credentials", "")
-        base_url = model_cfg.get("api_base_url", "https://api.openai.com/v1").rstrip("/")
-        model_name = model_cfg.get("model_name", "gpt-4o")
+        api_key = model_cfg.get("auth_credentials") or ""
+        base_url = (model_cfg.get("api_base_url") or "https://api.openai.com/v1").rstrip("/")
+        model_name = model_cfg.get("model_name") or "gpt-4o"
 
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         body = {
@@ -125,7 +125,14 @@ class OpenAIAdapter(ModelAdapter):
                 resp = await client.post(f"{base_url}/chat/completions", json=body, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
-            raw = data["choices"][0]["message"]["content"]
+            # Safely extract content: handle missing/null choices/message/content
+            raw = None
+            try:
+                raw = data["choices"][0]["message"]["content"]
+            except (KeyError, IndexError, TypeError):
+                raw = str(data)
+            if raw is None:
+                raw = str(data)
             latency = (time.monotonic() - start) * 1000
             logger.info("[JUDGE] <<< RESPONSE [%s] (%dms) score=… raw=%.200s", resp.status_code, latency, raw)
             return _parse_judge_response(raw, model_name, latency)
@@ -141,9 +148,9 @@ class AnthropicAdapter(ModelAdapter):
     async def invoke(self, model_cfg: dict, prompt: str, params: dict) -> JudgeResponse:
         import time
         start = time.monotonic()
-        api_key = model_cfg.get("auth_credentials", "")
-        base_url = model_cfg.get("api_base_url", "https://api.anthropic.com").rstrip("/")
-        model_name = model_cfg.get("model_name", "claude-sonnet-4-20250514")
+        api_key = model_cfg.get("auth_credentials") or ""
+        base_url = (model_cfg.get("api_base_url") or "https://api.anthropic.com").rstrip("/")
+        model_name = model_cfg.get("model_name") or "claude-sonnet-4-20250514"
 
         headers = {
             "x-api-key": api_key,
@@ -167,7 +174,14 @@ class AnthropicAdapter(ModelAdapter):
                 resp = await client.post(f"{base_url}/v1/messages", json=body, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
-            raw = data["content"][0]["text"]
+            # Safely extract content: handle missing/null content fields
+            raw = None
+            try:
+                raw = data["content"][0]["text"]
+            except (KeyError, IndexError, TypeError):
+                raw = str(data)
+            if raw is None:
+                raw = str(data)
             latency = (time.monotonic() - start) * 1000
             logger.info("[JUDGE] <<< RESPONSE [%s] (%dms) raw=%.200s", resp.status_code, latency, raw)
             return _parse_judge_response(raw, model_name, latency)
@@ -187,9 +201,11 @@ class CustomOpenAIAdapter(ModelAdapter):
 
 # ── Response Parser ──────────────────────────────────────────────────────
 
-def _parse_judge_response(raw: str, model_name: str = "", latency_ms: float = 0.0) -> JudgeResponse:
+def _parse_judge_response(raw: str | None, model_name: str = "", latency_ms: float = 0.0) -> JudgeResponse:
     """Four-layer fallback parser for AI judge responses."""
 
+    if raw is None:
+        raw = ""
     result = JudgeResponse(raw_response=raw, model_name=model_name, latency_ms=latency_ms)
 
     # Layer 1: strict JSON parse
