@@ -16,7 +16,34 @@ venv/
 *.swo
 
 # Data (DB, uploads, secrets)
+# ── Database & Data Files ────────────────────────
+# Ignore ALL data directories (DB, uploads, exports, secrets, logs)
+data/
+# Also ignore loose DB files in project root
+*.db
+*.sqlite
+*.sqlite3
 
+# ── Secrets & Credentials ───────────────────────
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.cert
+**/jwt_secret.key
+**/encryption_key.bin
+
+# ── Logs & Debug ────────────────────────────────
+*.log
+logs/
+debug_*.py
+debug_*.txt
+_query*.py
+_query*.sql
+*_analysis.txt
+*_judge.txt
+*_section.txt
 
 # Environment
 .env
