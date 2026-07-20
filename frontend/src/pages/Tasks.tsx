@@ -89,6 +89,7 @@ const Tasks: React.FC = () => {
   };
 
   const columns = [
+    { title: '任务ID', dataIndex: 'display_id', width: 90 },
     { title: '任务名称', dataIndex: 'name', render: (n: string, r: any) => <a onClick={() => navigate(`/tasks/${r.id}`)}>{n}</a> },
     {
       title: '状态', dataIndex: 'status', render: (s: string) => <Tag color={statusColors[s]}>{s}</Tag>,

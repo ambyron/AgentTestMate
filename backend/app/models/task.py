@@ -10,6 +10,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(String(36), primary_key=True)
+    display_id = Column(String(6), nullable=False, unique=True)  # 六位展示ID, 如 000001
     name = Column(String(255), nullable=False)
     agent_ids = Column(JSON, nullable=False, default=[])
     dataset_ids = Column(JSON, nullable=False, default=[])

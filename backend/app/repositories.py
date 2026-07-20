@@ -651,6 +651,20 @@ async def judge_accuracy(db: AsyncSession, judge_model_id: str | None = None, sp
 
 # ── Task ────────────────────────────────────────────────────
 
+async def get_next_display_id(db: AsyncSession) -> str:
+    """生成下一个六位数字展示ID（自然顺序增长）。"""
+    from sqlalchemy import select as _sa_select, func as _sa_func
+    result = await db.execute(
+        _sa_select(_sa_func.max(Task.display_id))
+    )
+    max_id = result.scalar()
+    if max_id:
+        next_num = int(max_id) + 1
+    else:
+        next_num = 1
+    return str(next_num).zfill(6)
+
+
 async def list_tasks(db: AsyncSession, space_id: str | None = None, status: str | None = None, limit: int = 50) -> list[Task]:
     stmt = select(Task)
     stmt = _space_filter(stmt, Task, space_id)
@@ -666,7 +680,8 @@ async def get_task(db: AsyncSession, task_id: str) -> Task | None:
 
 
 async def create_task(db: AsyncSession, data: dict) -> Task:
-    task = Task(id=_uuid(), **data, created_at=_now())
+    display_id = await get_next_display_id(db)
+    task = Task(id=_uuid(), display_id=display_id, **data, created_at=_now())
     db.add(task)
     await db.flush()
     return task

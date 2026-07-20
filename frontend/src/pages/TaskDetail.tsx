@@ -223,6 +223,7 @@ const TaskDetail: React.FC = () => {
       </Space>
 
       <Descriptions column={3} bordered size="small" className="mb-16">
+        <Descriptions.Item label="任务ID"><Tag>{task.display_id || task.id.slice(0, 8)}</Tag></Descriptions.Item>
         <Descriptions.Item label="智能体">
           {(task.agent_ids || []).map((id: string) => {
             const a = (agentsData || []).find((x: any) => x.id === id);

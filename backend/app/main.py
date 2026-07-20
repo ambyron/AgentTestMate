@@ -316,6 +316,24 @@ async def lifespan(app: FastAPI):
                     # Link existing rules to default ScoreConfig
                     if "rules" in table_names:
                         sync_conn.execute(text("UPDATE rules SET score_config_id = 'default_numeric' WHERE score_config_id IS NULL"))
+
+            # Migration: add display_id column to tasks
+            if "tasks" in table_names:
+                cols = [c["name"] for c in inspector.get_columns("tasks")]
+                if "display_id" not in cols:
+                    sync_conn.execute(text("ALTER TABLE tasks ADD COLUMN display_id VARCHAR(6)"))
+                    # Assign display_id for existing tasks (natural order by created_at)
+                    existing_tasks = sync_conn.execute(
+                        text("SELECT id, ROW_NUMBER() OVER (ORDER BY created_at) AS rn FROM tasks")
+                    ).fetchall()
+                    for row in existing_tasks:
+                        display_id = str(row.rn).zfill(6)
+                        sync_conn.execute(
+                            text("UPDATE tasks SET display_id = :did WHERE id = :tid"),
+                            {"did": display_id, "tid": row.id},
+                        )
+                    # Add unique constraint
+                    sync_conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_tasks_display_id ON tasks(display_id)"))
         # Migration: create default space + add space_id to all entity tables
         def _migrate_space(sync_conn):
             inspector = inspect(sync_conn)
