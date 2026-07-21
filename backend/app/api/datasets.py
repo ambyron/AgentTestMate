@@ -22,7 +22,7 @@ _upload_locks: defaultdict = defaultdict(asyncio.Lock)
 _upload_timestamps: defaultdict[str, list[float]] = defaultdict(list)
 _MAX_CONCURRENT_UPLOADS = 2
 _UPLOAD_WINDOW_SEC = 10
-_MAX_UPLOADS_PER_WINDOW = 5
+_MAX_UPLOADS_PER_WINDOW = 2
 
 
 async def _check_upload_rate(user_id: str) -> None:
@@ -136,6 +136,38 @@ async def import_dataset(file: UploadFile = File(...), db: AsyncSession = Depend
         elif ext in (".yaml", ".yml"):
             import yaml
             data = yaml.safe_load(content)
+        elif ext in (".xlsx", ".xls"):
+            import pandas as pd
+            import io
+            import math as _math
+            df = pd.read_excel(io.BytesIO(content), engine='openpyxl' if ext == '.xlsx' else 'xlrd', keep_default_na=False)
+            # If first cell is a JSON string (structured format), parse it
+            if df.shape[0] == 1 and df.shape[1] == 1:
+                cell_val = df.iloc[0, 0]
+                if isinstance(cell_val, str) and cell_val.strip().startswith("{"):
+                    data = json.loads(cell_val)
+                else:
+                    raise HTTPException(400, "xlsx 结构化格式要求第一个单元格为 JSON 对象")
+            else:
+                # Table format — same cleaning as CSV
+                for col in ['objectives', 'tags', 'rule_refs']:
+                    if col in df.columns:
+                        df[col] = df[col].apply(
+                            lambda v: json.loads(v) if isinstance(v, str) and v.strip().startswith('[') else v
+                        )
+                data = df.to_dict(orient="records")
+                cleaned = []
+                for row in data:
+                    cleaned_row = {}
+                    for k, v in row.items():
+                        if isinstance(v, float) and (_math.isnan(v) or _math.isinf(v)):
+                            cleaned_row[k] = None
+                        elif hasattr(v, 'item'):
+                            cleaned_row[k] = v.item()
+                        else:
+                            cleaned_row[k] = v
+                    cleaned.append(cleaned_row)
+                data = cleaned
         else:
             raise HTTPException(400, f"Unsupported format: {ext}")
     except Exception as e:
