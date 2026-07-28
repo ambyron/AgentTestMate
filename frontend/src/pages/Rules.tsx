@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Switch, Space, message, Typography, Tag, Popconfirm, Upload } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, ExperimentOutlined, UploadOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Select, Space, message, Typography, Tag, Popconfirm, Upload } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rules, evalPrompts, rubrics, objectives as objectivesApi } from '../api/client';
 
@@ -66,8 +66,6 @@ const CONFIG_TEMPLATES: Record<string, ConfigTemplate> = {
 
 const Rules: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewResult, setPreviewResult] = useState<any>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [importing, setImporting] = useState(false);
@@ -89,21 +87,6 @@ const Rules: React.FC = () => {
     mutationFn: (id: string) => rules.delete(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['rules'] }); message.success('已删除'); },
   });
-
-  const handlePreview = async (ruleId: string) => {
-    setPreviewResult({ loading: true });
-    setPreviewOpen(true);
-    try {
-      const result = await rules.preview(ruleId, {
-        input: '测试输入内容',
-        actual_output: '智能体的实际回复内容',
-        expected_output: '期望的回复内容',
-      });
-      setPreviewResult(result);
-    } catch {
-      setPreviewResult({ error: '预览失败' });
-    }
-  };
 
   const openEdit = (record?: any) => {
     setEditing(record);
@@ -148,12 +131,10 @@ const Rules: React.FC = () => {
     { title: '阈值', dataIndex: 'threshold', width: 80 },
     { title: '评价目标', dataIndex: 'objectives', width: 200,
       render: (obj: string[]) => obj?.length ? obj.map(o => <Tag key={o}>{o}</Tag>) : '-' },
-    { title: '启用', dataIndex: 'enabled', width: 60, render: (v: boolean) => v ? <Tag color="green">是</Tag> : <Tag>否</Tag> },
     {
-      title: '操作', width: 200,
+      title: '操作', width: 140,
       render: (_: any, r: any) => (
         <Space>
-          <Button size="small" icon={<ExperimentOutlined />} onClick={() => handlePreview(r.id)}>预览</Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} />
           <Popconfirm title="确定删除?" onConfirm={() => deleteMut.mutate(r.id)}>
             <Button size="small" danger icon={<DeleteOutlined />} />
@@ -185,6 +166,7 @@ const Rules: React.FC = () => {
           }
           delete v.eval_strategy;
           delete v.rating_method;
+          v.enabled = true;
           console.log('[DEBUG] 转换后的提交数据:', JSON.stringify(v, null, 2));
           createMut.mutate(v);
         }}>
@@ -251,7 +233,6 @@ const Rules: React.FC = () => {
           </Form.Item>
           <Space style={{ width: '100%' }} size={16}>
             <Form.Item name="threshold" label="阈值" initialValue={0.8}><Input type="number" step={0.1} /></Form.Item>
-            <Form.Item name="enabled" label="启用" valuePropName="checked" initialValue={true}><Switch /></Form.Item>
           </Space>
           {currentConfig && (
             <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f6f8fa', borderRadius: 6, fontSize: 13, whiteSpace: 'pre-wrap', color: '#555' }}>
@@ -335,19 +316,6 @@ const Rules: React.FC = () => {
           <div style={{ marginTop: 16 }}>
             <Typography.Text type="danger">导入出错: {importResult.error}</Typography.Text>
           </div>
-        )}
-      </Modal>
-
-      <Modal title="规则预览" open={previewOpen} onCancel={() => setPreviewOpen(false)} footer={null}>
-        {previewResult?.loading ? <Typography.Text>计算中...</Typography.Text> : (
-          previewResult ? (
-            <div>
-              <p><strong>分数:</strong> {previewResult.score}</p>
-              <p><strong>通过:</strong> {previewResult.passed ? '✅' : '❌'}</p>
-              <p><strong>详情:</strong> {JSON.stringify(previewResult.details)}</p>
-              {previewResult.ai_reasoning && <p><strong>AI 分析:</strong> {previewResult.ai_reasoning}</p>}
-            </div>
-          ) : <Typography.Text type="danger">预览失败</Typography.Text>
         )}
       </Modal>
     </div>
