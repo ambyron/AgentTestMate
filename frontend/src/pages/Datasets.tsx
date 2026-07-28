@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Upload, Tag, Space, message, Popconfirm } from 'antd';
-import { PlusOutlined, UploadOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Select, Upload, Tag, Space, message, Popconfirm, Dropdown } from 'antd';
+import { PlusOutlined, UploadOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FileAddOutlined, DownloadOutlined, DownOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { datasets, testCases } from '../api/client';
 
@@ -10,6 +10,7 @@ const Datasets: React.FC = () => {
   const [detailData, setDetailData] = useState<any>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editData, setEditData] = useState<any>(null);
+  const [isNewCase, setIsNewCase] = useState(false);
   const [datasetEditOpen, setDatasetEditOpen] = useState(false);
   const [datasetEditData, setDatasetEditData] = useState<any>(null);
   const [form] = Form.useForm();
@@ -34,12 +35,23 @@ const Datasets: React.FC = () => {
     onSuccess: () => {
       message.success('已更新');
       setEditOpen(false);
-      // Refresh detail data if the modal is open
       if (detailData?.dataset?.id) {
         datasets.get(detailData.dataset.id).then(d => setDetailData(d));
       }
     },
     onError: (e: any) => message.error(`更新失败: ${e.message}`),
+  });
+
+  const createTestCaseMut = useMutation({
+    mutationFn: (d: any) => testCases.create(d),
+    onSuccess: () => {
+      message.success('用例已添加');
+      setEditOpen(false);
+      if (detailData?.dataset?.id) {
+        datasets.get(detailData.dataset.id).then(d => setDetailData(d));
+      }
+    },
+    onError: (e: any) => message.error(`添加失败: ${e?.response?.data?.detail || e.message}`),
   });
 
   const datasetUpdateMut = useMutation({
@@ -62,9 +74,13 @@ const Datasets: React.FC = () => {
     }
   };
 
-  const viewDetail = async (id: string) => {
-    const d = await datasets.get(id);
+  const refreshDetail = async (datasetId: string) => {
+    const d = await datasets.get(datasetId);
     setDetailData(d);
+  };
+
+  const viewDetail = async (id: string) => {
+    await refreshDetail(id);
     setDetailOpen(true);
   };
 
@@ -83,21 +99,31 @@ const Datasets: React.FC = () => {
     datasetUpdateMut.mutate({ id: datasetEditData.id, data: values });
   };
 
-  const handleEdit = (record: any) => {
-    setEditData(record);
-    editForm.setFieldsValue({
-      case_id: record.case_id,
-      input: record.input,
-      expected_output: record.expected_output,
-      objectives: record.objectives || [],
-      tags: record.tags || [],
-    });
+  const handleEdit = (record: any, isNew: boolean = false) => {
+    setIsNewCase(isNew);
+    setEditData(isNew ? { dataset_id: detailData?.dataset?.id } : record);
+    if (isNew) {
+      editForm.resetFields();
+      editForm.setFieldsValue({ case_id: '', objectives: [], tags: [] });
+    } else {
+      editForm.setFieldsValue({
+        case_id: record.case_id,
+        input: record.input,
+        expected_output: record.expected_output,
+        objectives: record.objectives || [],
+        tags: record.tags || [],
+      });
+    }
     setEditOpen(true);
   };
 
   const handleEditSubmit = () => {
     const values = editForm.getFieldsValue();
-    updateMut.mutate({ id: editData.id, data: values });
+    if (isNewCase) {
+      createTestCaseMut.mutate({ ...values, dataset_id: detailData?.dataset?.id });
+    } else {
+      updateMut.mutate({ id: editData.id, data: values });
+    }
   };
 
   const columns = [
@@ -107,11 +133,19 @@ const Datasets: React.FC = () => {
     { title: '版本', dataIndex: 'version', width: 80 },
     { title: '创建时间', dataIndex: 'created_at', render: (t: string) => new Date(t).toLocaleString('zh-CN'), width: 180 },
     {
-      title: '操作', width: 220,
+      title: '操作', width: 280,
       render: (_: any, r: any) => (
         <Space>
           <Button size="small" icon={<EyeOutlined />} onClick={() => viewDetail(r.id)}>查看</Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => handleDatasetEdit(r)} />
+          <Dropdown menu={{
+            items: [
+              { key: 'json', label: '导出 JSON', icon: <DownloadOutlined />, onClick: () => datasets.exportDownload(r.id, r.name, 'json') },
+              { key: 'xlsx', label: '导出 XLSX', icon: <DownloadOutlined />, onClick: () => datasets.exportDownload(r.id, r.name, 'xlsx') },
+            ],
+          }}>
+            <Button size="small" icon={<DownloadOutlined />}>导出 <DownOutlined /></Button>
+          </Dropdown>
           <Popconfirm title="确定删除?" onConfirm={() => deleteMut.mutate(r.id)}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
@@ -146,19 +180,26 @@ const Datasets: React.FC = () => {
 
       <Modal title={`数据集: ${detailData?.dataset?.name || ''}`} open={detailOpen} onCancel={() => setDetailOpen(false)} width={800} footer={null}>
         {detailData && (
-          <Table dataSource={detailData.test_cases || []} rowKey="id" pagination={{ pageSize: 10 }}
-            columns={[
-              { title: '#', key: 'index', width: 60, render: (_: any, __: any, i: number) => i + 1 },
-              { title: 'Case ID', dataIndex: 'case_id', width: 120 },
-              { title: '输入', dataIndex: 'input', ellipsis: true },
-              { title: '期望输出', dataIndex: 'expected_output', ellipsis: true },
-              { title: '评测目标', dataIndex: 'objectives', render: (c: string[]) => c?.map(t => <Tag key={t}>{t}</Tag>) },
-              {
-                title: '操作', width: 80,
-                render: (_: any, r: any) => <Button size="small" onClick={() => handleEdit(r)}>编辑</Button>,
-              },
-            ]}
-          />
+          <>
+            <Table dataSource={detailData.test_cases || []} rowKey="id" pagination={{ pageSize: 10 }}
+              columns={[
+                { title: '#', key: 'index', width: 60, render: (_: any, __: any, i: number) => i + 1 },
+                { title: 'Case ID', dataIndex: 'case_id', width: 120 },
+                { title: '输入', dataIndex: 'input', ellipsis: true },
+                { title: '期望输出', dataIndex: 'expected_output', ellipsis: true },
+                { title: '评测目标', dataIndex: 'objectives', render: (c: string[]) => c?.map(t => <Tag key={t}>{t}</Tag>) },
+                {
+                  title: '操作', width: 80,
+                  render: (_: any, r: any) => <Button size="small" onClick={() => handleEdit(r)}>编辑</Button>,
+                },
+              ]}
+            />
+            <div style={{ textAlign: 'center', marginTop: 12 }}>
+              <Button type="dashed" icon={<FileAddOutlined />} onClick={() => handleEdit(null, true)} block>
+                新增用例
+              </Button>
+            </div>
+          </>
         )}
       </Modal>
 
@@ -172,7 +213,7 @@ const Datasets: React.FC = () => {
         </Form>
       </Modal>
 
-      <Modal title={`编辑用例: ${editData?.case_id || ''}`} open={editOpen} onCancel={() => setEditOpen(false)} onOk={handleEditSubmit} width={720}>
+      <Modal title={isNewCase ? '新增用例' : `编辑用例: ${editData?.case_id || ''}`} open={editOpen} onCancel={() => setEditOpen(false)} onOk={handleEditSubmit} width={720}>
         <Form form={editForm} layout="vertical">
           <Form.Item name="case_id" label="Case ID" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="input" label="输入" rules={[{ required: true }]}>
@@ -201,3 +242,4 @@ const Datasets: React.FC = () => {
 };
 
 export default Datasets;
+

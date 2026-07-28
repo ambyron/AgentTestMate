@@ -99,6 +99,8 @@ async def import_dataset(file: UploadFile = File(...), db: AsyncSession = Depend
     if ext not in _VALID_EXTENSIONS:
         raise HTTPException(400, f"不支持的文件格式: {ext}（支持: {', '.join(_VALID_EXTENSIONS)}）")
 
+    #  ...  there is func to be called ... #
+   
     # ── Read with size limit ───────────────────────────────────
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
     content = await _read_with_limit(file, max_bytes)
@@ -245,7 +247,9 @@ async def delete_dataset(dataset_id: str, db: AsyncSession = Depends(get_db),
 async def export_dataset(dataset_id: str, format: str = "json", db: AsyncSession = Depends(get_db),
                           current_user: User = Depends(get_current_user),
                           current_space: str | None = Depends(get_current_space)):
-    from fastapi.responses import PlainTextResponse
+    from fastapi.responses import PlainTextResponse, StreamingResponse
+    import io
+    from urllib.parse import quote
     if not await repo.verify_space_access(db, repo.Dataset, dataset_id, current_space, current_user.role):
         raise HTTPException(403, "Access denied")
     ds = await repo.get_dataset(db, dataset_id)
@@ -265,4 +269,25 @@ async def export_dataset(dataset_id: str, format: str = "json", db: AsyncSession
     if format == "yaml":
         import yaml
         return PlainTextResponse(yaml.dump(export, allow_unicode=True), media_type="text/yaml")
-    return export
+    elif format == "xlsx":
+        from openpyxl import Workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "test_cases"
+        ws.append(["case_id", "input", "expected_output", "objectives"])
+        import json as _j
+        for c in cases:
+            ws.append([c.case_id, c.input, c.expected_output, _j.dumps(c.objectives, ensure_ascii=False)])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        safe_name = quote(ds.name)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                 headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}.xlsx"})
+    # JSON: pretty-printed for readability
+    safe_name = quote(ds.name)
+    return PlainTextResponse(
+        json.dumps(export, ensure_ascii=False, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}.json"},
+    )

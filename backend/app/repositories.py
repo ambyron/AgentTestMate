@@ -34,7 +34,7 @@ def _filter_fields(data: dict, allowed: set[str]) -> dict:
 _AGENT_FIELDS = {"name", "description", "api_base_url", "method", "headers_template",
                  "body_template", "auth_type", "auth_credentials", "status", "timeout_ms"}
 _DATASET_FIELDS = {"name", "description", "dataset_type", "tags"}
-_TESTCASE_FIELDS = {"case_id", "input", "expected_output", "objectives", "tags", "rule_refs", "sort_order"}
+_TESTCASE_FIELDS = {"case_id", "input", "expected_output", "objectives", "tags", "rule_refs", "sort_order", "dataset_id", "space_id"}
 _RULE_FIELDS = {"name", "description", "type", "config", "objectives",
                 "threshold", "enabled", "score_config_id", "ai_judge_model_id", "ai_eval_prompt_id",
                 "ai_rubric_id", "eval_strategy", "custom_script"}

@@ -69,6 +69,16 @@ export const datasets = {
   },
   update: (id: string, data: any) => client.put(`/datasets/${id}`, data).then(r => r.data),
   delete: (id: string) => client.delete(`/datasets/${id}`),
+  exportDownload: async (id: string, filename: string, format: string = 'json') => {
+    const resp = await client.get(`/datasets/${id}/export`, { params: { format }, responseType: 'blob' });
+    const url = URL.createObjectURL(resp.data);
+    const a = document.createElement('a');
+    const ext = format === 'xlsx' ? 'xlsx' : 'json';
+    a.href = url;
+    a.download = `${filename}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };
 
 // Rule
@@ -162,6 +172,7 @@ export const objectives = {
 // Test Case
 export const testCases = {
   get: (id: string) => client.get(`/test-cases/${id}`).then(r => r.data),
+  create: (data: any) => client.post('/test-cases', data).then(r => r.data),
   update: (id: string, data: any) => client.put(`/test-cases/${id}`, data).then(r => r.data),
   delete: (id: string) => client.delete(`/test-cases/${id}`),
 };
