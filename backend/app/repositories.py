@@ -46,7 +46,7 @@ _EVAL_PROMPT_FIELDS = {"name", "description", "strategy", "system_prompt", "user
                        "template_content", "output_schema", "few_shot_examples", "variables", "tags"}
 _RUBRIC_FIELDS = {"name", "description"}
 _TASK_FIELDS = {"name", "config", "ai_scoring_config", "filters", "status", "progress"}
-_ANNOTATION_FIELDS = {"score", "comment", "label", "annotator", "status"}
+_ANNOTATION_FIELDS = {"score", "comment", "label", "annotator", "status", "task_result_id", "space_id"}
 _USER_FIELDS = {"username", "email", "role", "is_active", "display_name", "hashed_password"}
 _SPACE_FIELDS = {"name", "description"}
 _TASK_RESULT_FIELDS = {"task_id", "agent_id", "case_id", "raw_input", "raw_output",
