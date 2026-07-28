@@ -191,8 +191,8 @@ const Tasks: React.FC = () => {
             </Form.Item>
           )}
           <Space style={{ width: '100%' }} align="baseline" wrap>
-            <Form.Item name="concurrency" label="并发度" initialValue={5}><InputNumber min={1} max={100} /></Form.Item>
-            <Form.Item name="timeout_ms" label="超时(ms)" initialValue={30000}><InputNumber min={1000} max={600000} step={1000} /></Form.Item>
+            <Form.Item name="concurrency" label="并发度" initialValue={3}><InputNumber min={1} max={10} /></Form.Item>
+            <Form.Item name="timeout_ms" label="超时(ms)" initialValue={30000}><InputNumber min={1000} max={300000} step={1000} /></Form.Item>
             <Form.Item name="global_threshold" label="全局通过线" initialValue={0.7}
               tooltip="整体评分达到此值才算案例通过">
               <InputNumber min={0} max={1} step={0.05} style={{ width: 100 }} />
