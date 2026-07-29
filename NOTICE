@@ -1,0 +1,118 @@
+AgentTestMate
+Copyright 2026 AgentTestMate Contributors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+
+========================================================================
+  Third-Party Dependencies
+========================================================================
+
+This product includes software developed by the following third parties:
+
+----------------------------------------------------------------------
+  FastAPI (https://fastapi.tiangolo.com/)
+  Copyright (c) 2018 Sebastián Ramírez
+  Licensed under the MIT License
+
+  SQLAlchemy (https://www.sqlalchemy.org/)
+  Copyright (c) 2005-2024, Michael Bayer and contributors
+  Licensed under the MIT License
+
+  Pydantic (https://docs.pydantic.dev/)
+  Copyright (c) 2019-2024, Pydantic Team
+  Licensed under the MIT License
+
+  httpx (https://www.python-httpx.org/)
+  Copyright (c) 2019, Encode OSS Ltd
+  Licensed under the BSD-3-Clause License
+
+  Jinja2 (https://palletsprojects.com/p/jinja/)
+  Copyright (c) 2007-2024, Pallets
+  Licensed under the BSD-3-Clause License
+
+  Typer (https://typer.tiangolo.com/)
+  Copyright (c) 2019 Sebastián Ramírez
+  Licensed under the MIT License
+
+  Rich (https://rich.readthedocs.io/)
+  Copyright (c) 2020 Will McGugan
+  Licensed under the MIT License
+
+  Cryptography (https://cryptography.io/)
+  Copyright (c) 2013-2024, Individual contributors
+  Licensed under the Apache License 2.0 and/or BSD-3-Clause License
+
+  pandas (https://pandas.pydata.org/)
+  Copyright (c) 2008-2011, AQR Capital Management, LLC
+  Licensed under the BSD-3-Clause License
+
+  openpyxl (https://openpyxl.readthedocs.io/)
+  Copyright (c) 2010-2024, openpyxl contributors
+  Licensed under the MIT License
+
+  pytest (https://pytest.org/)
+  Copyright (c) 2004-2024, Holger Krekel and others
+  Licensed under the MIT License
+
+----------------------------------------------------------------------
+  React (https://react.dev/)
+  Copyright (c) Meta Platforms, Inc. and affiliates.
+  Licensed under the MIT License
+
+  Ant Design (https://ant.design/)
+  Copyright (c) 2015-present, Alipay (Ant Group)
+  Licensed under the MIT License
+
+  Zustand (https://github.com/pmndrs/zustand)
+  Copyright (c) 2019 Paul Henschel
+  Licensed under the MIT License
+
+  TanStack React Query (https://tanstack.com/query)
+  Copyright (c) 2023, Tanner Linsley
+  Licensed under the MIT License
+
+  Axios (https://axios-http.com/)
+  Copyright (c) 2014-present, Matt Zabriskie
+  Licensed under the MIT License
+
+  ECharts (https://echarts.apache.org/)
+  Licensed under the Apache License 2.0
+
+  Vite (https://vite.dev/)
+  Copyright (c) 2019-present, VoidZero Inc.
+  Licensed under the MIT License
+
+----------------------------------------------------------------------
+  uvicorn (https://www.uvicorn.org/)
+  Copyright (c) 2017, Encode OSS Ltd
+  Licensed under the BSD-3-Clause License
+
+  aiosqlite (https://github.com/omnilib/aiosqlite)
+  Copyright (c) 2018, John Reese
+  Licensed under the MIT License
+
+  python-multipart (https://github.com/andrew-d/python-multipart)
+  Licensed under the Apache License 2.0
+
+  PyYAML (https://pyyaml.org/)
+  Copyright (c) 2017-2021, Ingy döt Net
+  Licensed under the MIT License
+
+  python-jose / PyJWT (https://github.com/jpadilla/pyjwt)
+  Copyright (c) 2015-2024, José Padilla
+  Licensed under the MIT License
+
+  bcrypt (https://github.com/pyca/bcrypt/)
+  Copyright (c) 2013-2024, The PyCA Developers
+  Licensed under the Apache License 2.0
