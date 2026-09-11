@@ -386,6 +386,7 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                             "rules": [
                                 {"rule_id": sr.rule_id, "rule_type": sr.rule_type,
                                  "name": rule_name_map.get(sr.rule_id, sr.rule_type),
+                                 "objectives": rule_objective_map.get(sr.rule_id, []),
                                  "score": sr.score, "passed": sr.passed,
                                  "data_type": sr.data_type,
                                  "details": sr.details, "error": sr.error}

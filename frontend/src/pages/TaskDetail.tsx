@@ -324,6 +324,13 @@ const TaskDetail: React.FC = () => {
                           background: i % 2 === 0 ? '#fafafa' : 'white', borderRadius: 4, marginBottom: 2, fontSize: 13,
                         }}>
                           <Tag color={rule.passed ? 'success' : 'error'} style={{ marginRight: 0 }}>{rule.name || rule.rule_type}</Tag>
+                          {rule.objectives && rule.objectives.length > 0 && (
+                            <Space size={4} wrap>
+                              {rule.objectives.map((obj: string) => (
+                                <Tag key={obj} color="blue" style={{ marginRight: 0, fontSize: 11 }}>{obj}</Tag>
+                              ))}
+                            </Space>
+                          )}
                           <span style={{ color: '#666', fontSize: 12 }}>({rule.rule_type})</span>
                           {rule.data_type === 'BOOLEAN' ? (
                             <span style={{ color: rule.passed ? '#3f8600' : '#cf1322', fontWeight: 600 }}>
