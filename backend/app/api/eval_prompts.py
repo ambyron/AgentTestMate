@@ -164,7 +164,6 @@ async def execute_prompt(prompt_id: str, data: dict, db: AsyncSession = Depends(
     system_prompt = data.get("system_prompt") or ep.system_prompt
     user_template = data.get("user_prompt_template") or ep.user_prompt_template or ep.template_content or ""
     sp, up = strategy.build_prompt(prompt_ctx, system_prompt, user_template)
-    full_prompt = f"{sp}\n\n{up}" if sp else up
 
     model_cfg = {
         "provider": judge.provider,
@@ -173,11 +172,13 @@ async def execute_prompt(prompt_id: str, data: dict, db: AsyncSession = Depends(
         "auth_credentials": judge.auth_credentials or "",
     }
     router = ModelRouter()
-    result = await router.invoke(model_cfg, full_prompt, {"max_tokens": 2048, "temperature": 0.0})
+    result = await router.invoke(model_cfg, up, {"max_tokens": 2048, "temperature": 0.0}, sp)
 
-    # Parse with strategy
-    parsed = strategy.parse_response(result.raw_response or "", ep.output_schema or {})
+    # Parse with strategy (schema from request or template)
+    schema = data.get("output_schema") or ep.output_schema or {}
+    parsed = strategy.parse_response(result.raw_response or "", schema)
 
+    rendered = f"[system]\n{sp}\n\n[user]\n{up}" if sp else up
     return {
         "strategy": strategy_name,
         "score": parsed.get("score", 0.0),
@@ -186,7 +187,7 @@ async def execute_prompt(prompt_id: str, data: dict, db: AsyncSession = Depends(
         "raw_response": result.raw_response,
         "error": result.error,
         "latency_ms": result.latency_ms,
-        "rendered_prompt": full_prompt,
+        "rendered_prompt": rendered,
     }
 
 

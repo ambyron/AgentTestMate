@@ -57,8 +57,15 @@ const EvalPrompts: React.FC = () => {
       if (values.few_shot_examples && typeof values.few_shot_examples === 'string') {
         try { values.few_shot_examples = JSON.parse(values.few_shot_examples); } catch { values.few_shot_examples = []; }
       }
-      if (values.output_schema && typeof values.output_schema === 'string') {
-        try { values.output_schema = JSON.parse(values.output_schema); } catch { values.output_schema = {}; }
+      // output_schema is an object from the API but the TextArea needs a string
+      if (values.output_schema) {
+        if (typeof values.output_schema === 'string') {
+          try { values.output_schema = JSON.stringify(JSON.parse(values.output_schema), null, 2); } catch { /* keep as-is */ }
+        } else {
+          values.output_schema = JSON.stringify(values.output_schema, null, 2);
+        }
+      } else {
+        values.output_schema = '';
       }
       form.setFieldsValue(values);
     } else {
@@ -84,10 +91,17 @@ const EvalPrompts: React.FC = () => {
     if (!builtinId || !data) return;
     const builtin = (data || []).find((t: any) => t.id === builtinId);
     if (!builtin) return;
+    // output_schema from the API is an object; the TextArea needs a pretty string
+    let schemaText = '';
+    if (builtin.output_schema) {
+      schemaText = typeof builtin.output_schema === 'string'
+        ? builtin.output_schema
+        : JSON.stringify(builtin.output_schema, null, 2);
+    }
     form.setFieldsValue({
       system_prompt: builtin.system_prompt || '',
       user_prompt_template: builtin.user_prompt_template || builtin.template_content || '',
-      output_schema: builtin.output_schema || '',
+      output_schema: schemaText,
       few_shot_examples: builtin.few_shot_examples || [],
       tags: builtin.tags || [],
     });
@@ -141,7 +155,19 @@ const EvalPrompts: React.FC = () => {
 
       <Modal title={editing ? '编辑提示词模板' : '新建提示词模板'} open={modalOpen} onCancel={() => setModalOpen(false)}
         onOk={() => form.submit()} confirmLoading={createMut.isPending} width={800}>
-        <Form form={form} layout="vertical" onFinish={(v) => createMut.mutate(v)}
+        <Form form={form} layout="vertical" onFinish={(v) => {
+          // output_schema TextArea holds a string; convert back to an object for the API
+          if (typeof v.output_schema === 'string') {
+            const trimmed = v.output_schema.trim();
+            if (trimmed) {
+              try { v.output_schema = JSON.parse(trimmed); }
+              catch { message.error('输出 Schema 不是合法的 JSON，请检查格式'); return; }
+            } else {
+              v.output_schema = {};
+            }
+          }
+          createMut.mutate(v);
+        }}
           onFinishFailed={({ errorFields }) => {
             const names = errorFields.map(f => f.name.join('.'));
             message.warning(`请完善表单: ${names.join(', ')}`);
@@ -216,8 +242,16 @@ const EvalPrompts: React.FC = () => {
               {viewData.system_prompt || '(无)'}
             </div>
             <Typography.Text strong style={{ display: 'block', marginBottom: 4 }}>User Prompt (Jinja2)</Typography.Text>
-            <div style={{ padding: 12, background: '#f6f8fa', borderRadius: 6, whiteSpace: 'pre-wrap', fontSize: 13, maxHeight: 300, overflow: 'auto' }}>
+            <div style={{ padding: 12, background: '#f6f8fa', borderRadius: 6, whiteSpace: 'pre-wrap', fontSize: 13, maxHeight: 300, overflow: 'auto', marginBottom: 16 }}>
               {viewData.user_prompt_template || viewData.template_content || '(无)'}
+            </div>
+            <Typography.Text strong style={{ display: 'block', marginBottom: 4 }}>输出 Schema (JSON)</Typography.Text>
+            <div style={{ padding: 12, background: '#f6f8fa', borderRadius: 6, whiteSpace: 'pre-wrap', fontSize: 13, maxHeight: 200, overflow: 'auto' }}>
+              {viewData.output_schema
+                ? (typeof viewData.output_schema === 'string'
+                    ? viewData.output_schema
+                    : JSON.stringify(viewData.output_schema, null, 2))
+                : '(无)'}
             </div>
           </div>
         )}

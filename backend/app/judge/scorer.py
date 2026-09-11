@@ -88,17 +88,16 @@ class LLMJudgeScorer(BaseScorer):
         system_prompt, user_prompt = strategy.build_prompt(
             prompt_ctx, system_prompt, user_template,
         )
-        full_prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
 
         # Resolve judge models
         judge_models = ctx.judge_models or {}
         model_ids = ctx.rule_config.get("judge_model_ids", list(judge_models.keys()))
         params = ctx.parameters or {}
 
-        # Invoke all judge models in parallel
+        # Invoke all judge models in parallel (system / user sent as separate roles)
         from asyncio import gather
         results = await gather(*[
-            self.model_router.invoke(judge_models[mid], full_prompt, params)
+            self.model_router.invoke(judge_models[mid], user_prompt, params, system_prompt)
             for mid in model_ids if mid in judge_models
         ], return_exceptions=True)
 

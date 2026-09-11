@@ -92,14 +92,25 @@ class ModelAdapter(ABC):
     """Base adapter for AI judge model providers."""
 
     @abstractmethod
-    async def invoke(self, model_cfg: dict, prompt: str, params: dict) -> JudgeResponse:
+    async def invoke(self, model_cfg: dict, prompt: str, params: dict,
+                     system_prompt: str | None = None) -> JudgeResponse:
         ...
+
+    @staticmethod
+    def _build_messages(prompt: str, system_prompt: str | None) -> list[dict]:
+        """Build a standard messages list with optional system role."""
+        messages: list[dict] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        return messages
 
 
 class OpenAIAdapter(ModelAdapter):
     """OpenAI-compatible API adapter."""
 
-    async def invoke(self, model_cfg: dict, prompt: str, params: dict) -> JudgeResponse:
+    async def invoke(self, model_cfg: dict, prompt: str, params: dict,
+                     system_prompt: str | None = None) -> JudgeResponse:
         import time
         start = time.monotonic()
         api_key = model_cfg.get("auth_credentials") or ""
@@ -109,7 +120,7 @@ class OpenAIAdapter(ModelAdapter):
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         body = {
             "model": model_name,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": self._build_messages(prompt, system_prompt),
             "temperature": params.get("temperature", 0.0),
             "max_tokens": params.get("max_tokens", 2048),
         }
@@ -145,7 +156,8 @@ class OpenAIAdapter(ModelAdapter):
 class AnthropicAdapter(ModelAdapter):
     """Anthropic API adapter."""
 
-    async def invoke(self, model_cfg: dict, prompt: str, params: dict) -> JudgeResponse:
+    async def invoke(self, model_cfg: dict, prompt: str, params: dict,
+                     system_prompt: str | None = None) -> JudgeResponse:
         import time
         start = time.monotonic()
         api_key = model_cfg.get("auth_credentials") or ""
@@ -162,6 +174,9 @@ class AnthropicAdapter(ModelAdapter):
             "max_tokens": params.get("max_tokens", 2048),
             "messages": [{"role": "user", "content": prompt}],
         }
+        # Anthropic uses a top-level system parameter
+        if system_prompt:
+            body["system"] = system_prompt
 
         try:
             safe_headers = {"x-api-key": api_key[:10] + "…"} if api_key else {}
@@ -194,9 +209,10 @@ class AnthropicAdapter(ModelAdapter):
 class CustomOpenAIAdapter(ModelAdapter):
     """Custom OpenAI-compatible adapter (same as OpenAI adapter)."""
 
-    async def invoke(self, model_cfg: dict, prompt: str, params: dict) -> JudgeResponse:
+    async def invoke(self, model_cfg: dict, prompt: str, params: dict,
+                     system_prompt: str | None = None) -> JudgeResponse:
         adapter = OpenAIAdapter()
-        return await adapter.invoke(model_cfg, prompt, params)
+        return await adapter.invoke(model_cfg, prompt, params, system_prompt)
 
 
 # ── Response Parser ──────────────────────────────────────────────────────
@@ -260,11 +276,12 @@ class ModelRouter:
         "custom": CustomOpenAIAdapter,
     }
 
-    def invoke(self, model_cfg: dict, prompt: str, params: dict | None = None) -> JudgeResponse:
+    def invoke(self, model_cfg: dict, prompt: str, params: dict | None = None,
+               system_prompt: str | None = None) -> JudgeResponse:
         provider = model_cfg.get("provider", "openai")
         adapter_cls = self._adapters.get(provider, OpenAIAdapter)
         adapter = adapter_cls()
-        return adapter.invoke(model_cfg, prompt, params or {})
+        return adapter.invoke(model_cfg, prompt, params or {}, system_prompt)
 
 
 # ── Arbitration Engine ───────────────────────────────────────────────────

@@ -28,110 +28,246 @@ def _seed_builtin_prompts(sync_conn):
     _empty_json = _json.dumps([])
     builtins = [
         {
-            "seq": 1, "id": "builtin_simple", "name": "通用评分 (默认)", "description": "通用 AI 评估评分模板",
-            "strategy": "simple", "is_builtin": 1, "version": "1.0",
-            "system_prompt": "You are an expert AI evaluation judge. Assess the quality of the AI's response based on accuracy, completeness, and clarity.",
-            "user_prompt_template": (
-                "## Input\n{{input}}\n\n"
-                "## Actual Output\n{{actual_output}}\n\n"
-                "{% if criteria %}\n## Criteria\n{{criteria}}\n{% endif %}\n\n"
-                "Evaluate the response quality. Provide a score between 0.0 and 1.0.\n"
-                "## Output Format\n"
-                '```json\n{"reasoning": "Your analysis...", "score": 0.85}\n```'
+            "seq": 1, "id": "builtin_simple", "name": "通用评分（中文范例）", "description": "适用于通用质量评估的中文范例模板。可直接使用，或按需修改「评分维度」与「评分标准」适配自己的测试场景。",
+            "strategy": "simple", "is_builtin": 1, "version": "1.0-zh",
+            "system_prompt": (
+                "你是一位资深的 AI 回复质量评估专家，负责对 AI 智能体的输出进行客观、严谨的打分。\n"
+                "你的评分必须基于事实、逻辑清晰、标准一致——同样的回复在任何情况下都应得到相近的分数。\n"
+                "评分范围严格限定在 0.0 到 1.0 之间。"
             ),
-            "output_schema": _json.dumps({"score": "number 0-1", "reasoning": "string"}),
-            "output_format": "json", "template_content": "", "variables": _empty_json,
+            "user_prompt_template": (
+                "## 任务说明\n请评估 AI 智能体针对用户问题的回复质量，给出 0.0-1.0 的评分。\n\n"
+                "## 用户输入\n{{input}}\n\n"
+                "{% if expected_output %}\n## 参考答案\n以下是为该问题准备的参考答案，可作为评判质量的依据之一：\n{{expected_output}}\n{% endif %}\n\n"
+                "{% if criteria %}\n## 评分准则\n请重点依据以下准则进行评判：\n{{criteria}}\n{% endif %}\n\n"
+                "## 实际输出\n以下是被评估的 AI 智能体的实际回复：\n{{actual_output}}\n\n"
+                "## 评分维度（供参考，可结合评分准则调整）\n请从以下维度综合考量：\n"
+                "1. **准确性**：内容是否事实正确、无明显错误\n"
+                "2. **完整性**：是否覆盖了问题的关键要点\n"
+                "3. **相关性**：是否紧扣问题、无跑题\n"
+                "4. **清晰度**：表达是否通顺、条理清晰\n\n"
+                "## 评分标准\n"
+                "- **0.9-1.0**：优秀，准确完整，无明显缺陷\n"
+                "- **0.7-0.9**：良好，基本正确，有少量不足\n"
+                "- **0.5-0.7**：一般，存在明显缺漏或部分错误\n"
+                "- **0.3-0.5**：较差，有较多错误或信息缺失\n"
+                "- **0.0-0.3**：很差，答非所问或严重错误\n\n"
+                "## 扣分项\n出现以下情况时，应在对应维度上酌情扣分：\n"
+                "- **事实性错误**：包含明显错误的事实、数据或结论，扣分从重\n"
+                "- **答非所问**：未回应用户的真实问题或意图，大幅扣分\n"
+                "- **信息缺失**：遗漏关键要点或必要信息，按缺失程度扣分\n"
+                "- **逻辑混乱**：推理过程前后矛盾、条理不清，酌情扣分\n"
+                "- **有害或不当内容**：包含不当、歧视性或有害表述，严重扣分\n"
+                "- **格式错误**：未按要求的结构或格式输出，酌情扣分\n\n"
+                "## 输出要求\n"
+                "请先简要说明你的分析理由，再给出最终评分。必须严格按照以下 JSON 格式输出，不要包含其他内容：\n"
+                '```json\n{"reasoning": "你的分析理由...", "score": 0.85}\n```'
+            ),
+            "output_schema": _json.dumps({"score": "number 0-1 的浮点数，表示综合质量评分", "reasoning": "string，说明评分的主要依据与分析过程"}, ensure_ascii=False),
+            "output_format": "json", "template_content": "", "variables": _json.dumps(["input", "actual_output", "expected_output", "criteria"]),
             "created_at": now, "updated_at": now,
         },
         {
-            "seq": 2, "id": "builtin_reference", "name": "参照对比 (默认)", "description": "基于预期输出进行参照对比评分",
-            "strategy": "reference", "is_builtin": 1, "version": "1.0",
-            "system_prompt": "You are an expert AI evaluation judge. Compare the actual output with the expected output (reference).",
-            "user_prompt_template": (
-                "## Input\n{{input}}\n\n"
-                "## Expected Output (Reference)\n{{expected_output}}\n\n"
-                "## Actual Output\n{{actual_output}}\n\n"
-                "Score how well the actual output matches the expected output in terms of:\n"
-                "- Accuracy: Does it contain the correct information?\n"
-                "- Completeness: Does it cover all aspects of the expected output?\n"
-                "- Clarity: Is it well-structured and clear?\n"
-                "Provide a score between 0.0 and 1.0.\n"
-                "## Output Format\n"
-                '```json\n{"reasoning": "Your comparative analysis...", '
-                '"score": 0.85, '
-                '"dimension_scores": {"accuracy": 0.9, "completeness": 0.8, "clarity": 0.85}}\n```'
+            "seq": 2, "id": "builtin_reference", "name": "参照对比（中文范例）", "description": "将实际输出与参考答案进行对比评分的中文范例模板。未提供参考答案时自动降级为质量评估。",
+            "strategy": "reference", "is_builtin": 1, "version": "1.0-zh",
+            "system_prompt": (
+                "你是一位资深的 AI 回复质量评估专家，负责将 AI 智能体的实际输出与参考答案进行严谨对比，并给出客观评分。\n"
+                "你的评分必须基于事实与标准答案，逻辑清晰、标准一致——同样的对比结果在任何情况下都应得到相近的分数。\n"
+                "评分范围严格限定在 0.0 到 1.0 之间。"
             ),
-            "output_schema": _json.dumps({"score": "number 0-1", "reasoning": "string", "dimensions": {"accuracy": "number", "completeness": "number", "clarity": "number"}}),
-            "output_format": "json", "template_content": "", "variables": _empty_json,
+            "user_prompt_template": (
+                "## 任务说明\n请将 AI 智能体的实际输出与参考答案进行对比，评估其匹配程度并给出 0.0-1.0 的评分。\n\n"
+                "## 用户输入\n{{input}}\n\n"
+                "{% if expected_output %}\n## 参考答案\n以下是为该问题准备的标准答案：\n{{expected_output}}\n{% else %}\n## 参考答案\n（本次未提供参考答案，请仅依据用户输入与实际输出，从内容质量角度进行评判。）\n{% endif %}\n\n"
+                "{% if criteria %}\n## 评分准则\n请重点依据以下准则进行评判：\n{{criteria}}\n{% endif %}\n\n"
+                "## 实际输出\n以下是被评估的 AI 智能体的实际回复：\n{{actual_output}}\n\n"
+                "## 对比要求\n请逐项对比实际输出与参考答案，明确指出：\n"
+                "1. **命中部分**：实际输出中与参考答案一致或等价的要点\n"
+                "2. **遗漏部分**：参考答案中有、但实际输出缺失的要点\n"
+                "3. **偏差部分**：实际输出中与参考答案矛盾、错误或多余的内容\n\n"
+                "## 评分维度（供参考，可结合评分准则调整）\n"
+                "1. **准确性**：与参考答案相比，事实与结论是否正确\n"
+                "2. **完整性**：是否覆盖了参考答案的全部关键要点\n"
+                "3. **清晰度**：表达是否通顺、结构是否清晰\n\n"
+                "## 评分标准\n"
+                "- **0.9-1.0**：与参考答案高度一致，要点齐全，无实质偏差\n"
+                "- **0.7-0.9**：主要要点一致，存在少量遗漏或不精确\n"
+                "- **0.5-0.7**：部分要点命中，但有明显遗漏或偏差\n"
+                "- **0.3-0.5**：仅少量要点相符，大部分缺失或错误\n"
+                "- **0.0-0.3**：与参考答案基本不符或严重偏离\n\n"
+                "## 扣分项\n出现以下情况时，应在对应维度上酌情扣分：\n"
+                "- **事实性错误**：与参考答案矛盾，或包含明显错误的事实、数据、结论，扣分从重\n"
+                "- **要点遗漏**：参考答案中的关键要点未覆盖，按缺失程度扣分\n"
+                "- **答非所问**：未回应用户的真实问题或意图，大幅扣分\n"
+                "- **过度发挥**：加入大量参考答案之外且无关的内容，酌情扣分\n"
+                "- **有害或不当内容**：包含不当、歧视性或有害表述，严重扣分\n\n"
+                "## 输出要求\n"
+                "请先给出对比分析（命中/遗漏/偏差），再给出最终评分。必须严格按照以下 JSON 格式输出，不要包含其他内容：\n"
+                '```json\n'
+                "{\n"
+                '  "reasoning": "对比分析：命中...；遗漏...；偏差...",\n'
+                '  "score": 0.85,\n'
+                '  "dimension_scores": {\n'
+                '    "准确性": 0.9,\n'
+                '    "完整性": 0.8,\n'
+                '    "清晰度": 0.85\n'
+                "  }\n"
+                "}\n"
+                "```"
+            ),
+            "output_schema": _json.dumps({"score": "number 0-1 的浮点数，表示与参考答案的匹配程度", "reasoning": "string，包含命中/遗漏/偏差的对比分析", "dimensions": {"准确性": "number", "完整性": "number", "清晰度": "number"}}, ensure_ascii=False),
+            "output_format": "json", "template_content": "", "variables": _json.dumps(["input", "actual_output", "expected_output", "criteria"]),
             "created_at": now, "updated_at": now,
         },
         {
-            "seq": 3, "id": "builtin_rubric", "name": "多维度评分 (默认)", "description": "按评分维度逐一打分",
-            "strategy": "rubric", "is_builtin": 1, "version": "1.0",
-            "system_prompt": "You are an expert AI evaluation judge. Score the response using the provided rubric dimensions.",
+            "seq": 3, "id": "builtin_rubric", "name": "多维度评分（中文范例）", "description": "对 AI 输出进行多维度评估的中文范例模板。含评分规约时按规约逐维度打分，无规约时自动降级为默认 3 维度。",
+            "strategy": "rubric", "is_builtin": 1, "version": "1.0-zh",
+            "system_prompt": (
+                "你是一位资深的 AI 回复质量评估专家，负责依据评分规约对 AI 智能体的输出进行多维度、客观的打分。\n"
+                "你必须严格按照评分规约中定义的每个维度逐项评估，评分标准一致——同样的输出在任何情况下都应得到相近的分数。\n"
+                "评分范围严格限定在 0.0 到 1.0 之间。"
+            ),
             "user_prompt_template": (
-                "## Input\n{{input}}\n\n"
-                "## Actual Output\n{{actual_output}}\n\n"
+                "## 任务说明\n请依据下方的评分规约，对 AI 智能体的输出进行多维度评估，给出各项维度得分及加权总分。\n\n"
+                "## 用户输入\n{{input}}\n\n"
+                "{% if expected_output %}\n## 参考答案\n以下是为该问题准备的标准答案，可作为评判依据之一：\n{{expected_output}}\n{% endif %}\n\n"
+                "## 实际输出\n以下是被评估的 AI 智能体的实际回复：\n{{actual_output}}\n\n"
+                "{% if rubric %}\n## 评分规约\n请严格按照以下规约逐维度打分：\n{{rubric}}\n{% else %}\n## 评分规约\n请从以下维度进行评估：\n"
+                "1. **准确性**：内容是否事实正确、无明显错误\n"
+                "2. **完整性**：是否覆盖了问题的关键要点\n"
+                "3. **清晰度**：表达是否通顺、条理清晰\n"
+                "{% endif %}\n\n"
+                "## 评分要求\n"
+                "1. **逐维度独立评估**：对上述每个维度，独立给出 0.0-1.0 的分数\n"
+                "2. **加权总分**：若规约中标注了维度权重，按权重计算加权总分；否则取各维度平均分\n"
+                "3. **评分一致性**：各维度得分需有明确依据\n\n"
+                "## 评分标准（适用于每个维度）\n"
+                "- **0.9-1.0**：该维度表现优秀，无明显缺陷\n"
+                "- **0.7-0.9**：该维度表现良好，有少量不足\n"
+                "- **0.5-0.7**：该维度表现一般，存在明显问题\n"
+                "- **0.3-0.5**：该维度表现较差，缺陷较多\n"
+                "- **0.0-0.3**：该维度表现很差或完全不满足\n\n"
+                "## 扣分项\n出现以下情况时，应在相关维度上酌情扣分：\n"
+                "- **事实性错误**：包含明显错误的事实、数据或结论，扣分从重\n"
+                "- **维度缺失**：某个评分维度完全未满足，该维度大幅扣分\n"
+                "- **答非所问**：未回应用户的真实问题或意图，大幅扣分\n"
+                "- **有害或不当内容**：包含不当、歧视性或有害表述，严重扣分\n\n"
+                "## 输出要求\n"
+                "请先给出各维度的分析理由，再给出维度得分与加权总分。必须严格按照以下 JSON 格式输出：\n"
+                '```json\n'
+                "{\n"
+                '  "reasoning": "各维度分析：...",\n'
+                '  "score": 0.85,\n'
+                '  "dimension_scores": {\n'
+                '    "准确性": 0.9,\n'
+                '    "完整性": 0.8,\n'
+                '    "清晰度": 0.85\n'
+                "  }\n"
+                "}\n"
+                "```"
+            ),
+            "output_schema": _json.dumps({"score": "number 0-1 的浮点数，表示加权总分", "reasoning": "string，包含各维度的分析理由", "dimensions": {"准确性": "number", "完整性": "number", "清晰度": "number"}}, ensure_ascii=False),
+            "output_format": "json", "template_content": "", "variables": _json.dumps(["input", "actual_output", "expected_output", "criteria", "rubric"]),
+            "created_at": now, "updated_at": now,
+        },
+        {
+            "seq": 4, "id": "builtin_cot", "name": "思维链评分（中文范例）", "description": "通过分步推理后再给出评分的中文范例模板。采用「先推理、后结论」的五步结构化分析。",
+            "strategy": "chain_of_thought", "is_builtin": 1, "version": "1.0-zh",
+            "system_prompt": (
+                "你是一位资深的 AI 回复质量评估专家，擅长通过严谨的分步推理，对 AI 智能体的输出进行客观、可信的打分。\n"
+                "你必须遵循「先推理、后结论」的原则：先按步骤逐条分析，再基于分析结果给出评分，保证评分的可解释性。\n"
+                "评分范围严格限定在 0.0 到 1.0 之间。"
+            ),
+            "user_prompt_template": (
+                "## 任务说明\n请通过分步推理，评估 AI 智能体针对用户问题的回复质量，并给出 0.0-1.0 的评分。\n\n"
+                "## 评估材料\n"
+                "### 用户输入\n{{input}}\n\n"
                 "{% if expected_output %}"
-                "## Expected Output (Reference)\n{{expected_output}}\n\n"
+                "### 参考答案\n以下是为该问题准备的标准答案，可作为评判依据：\n{{expected_output}}\n\n"
                 "{% endif %}"
-                "## Scoring Rubric\n{{rubric}}\n\n"
-                "Score each dimension in the rubric independently, then provide a weighted overall score.\n"
-                "## Output Format\n"
-                '```json\n{"reasoning": "Your analysis for each dimension...", '
-                '"score": 0.85, '
-                '"dimension_scores": {"dimension_name": 0.9}}\n```'
+                "{% if criteria %}"
+                "### 评分准则\n请重点依据以下准则进行评判：\n{{criteria}}\n\n"
+                "{% endif %}"
+                "### 实际输出\n以下是被评估的 AI 智能体的实际回复：\n{{actual_output}}\n\n"
+                "## 推理步骤\n请严格按照以下步骤逐步分析，不要跳步：\n\n"
+                "**第 1 步 · 理解任务**\n说明用户问题的核心诉求是什么，一个理想回答应包含哪些关键要点。\n\n"
+                "**第 2 步 · 核查事实**\n逐条检查实际输出中的事实、数据、结论是否正确，是否有明显错误或幻觉。\n\n"
+                "**第 3 步 · 评估完整性**\n对照用户诉求（或参考答案），判断实际输出覆盖了哪些要点、遗漏了哪些要点。\n\n"
+                "**第 4 步 · 评估表达**\n判断实际输出的结构、逻辑与表述是否清晰、有条理。\n\n"
+                "**第 5 步 · 综合定分**\n综合以上分析，给出最终评分，并说明该分数落在哪个档位、为什么。\n\n"
+                "## 评分标准\n"
+                "- **0.9-1.0**：优秀，准确完整，无明显缺陷\n"
+                "- **0.7-0.9**：良好，基本正确，有少量不足\n"
+                "- **0.5-0.7**：一般，存在明显缺漏或部分错误\n"
+                "- **0.3-0.5**：较差，有较多错误或信息缺失\n"
+                "- **0.0-0.3**：很差，答非所问或严重错误\n\n"
+                "## 扣分项\n出现以下情况时，应酌情扣分：\n"
+                "- **事实性错误**：包含明显错误的事实、数据或结论，扣分从重\n"
+                "- **答非所问**：未回应用户的真实问题或意图，大幅扣分\n"
+                "- **信息缺失**：遗漏关键要点或必要信息，按缺失程度扣分\n"
+                "- **逻辑混乱**：推理过程前后矛盾、条理不清，酌情扣分\n\n"
+                "## 输出要求\n"
+                "`reasoning` 字段中请完整保留上述 5 个步骤的分析过程。必须严格按照以下 JSON 格式输出，不要包含其他内容：\n"
+                '```json\n'
+                "{\n"
+                '  "reasoning": "第1步：...\\n第2步：...\\n第3步：...\\n第4步：...\\n第5步：...",\n'
+                '  "score": 0.85\n'
+                "}\n"
+                "```"
             ),
-            "output_schema": _json.dumps({"score": "number 0-1", "reasoning": "string", "dimensions": "object"}),
-            "output_format": "json", "template_content": "", "variables": _empty_json,
+            "output_schema": _json.dumps({"score": "number 0-1 的浮点数，表示综合质量评分", "reasoning": "string，包含完整的5步推理分析过程"}, ensure_ascii=False),
+            "output_format": "json", "template_content": "", "variables": _json.dumps(["input", "actual_output", "expected_output", "criteria"]),
             "created_at": now, "updated_at": now,
         },
         {
-            "seq": 4, "id": "builtin_cot", "name": "思维链评分 (默认)", "description": "逐步推理后再给出评分",
-            "strategy": "chain_of_thought", "is_builtin": 1, "version": "1.0",
-            "system_prompt": "You are an expert AI evaluation judge. Before giving the final score, reason step-by-step.",
-            "user_prompt_template": (
-                "## Input\n{{input}}\n\n"
-                "## Actual Output\n{{actual_output}}\n\n"
-                "{% if criteria %}\n## Scoring Criteria\n{{criteria}}\n{% endif %}\n\n"
-                "Please follow these steps:\n"
-                "1. Understand the evaluation criteria\n"
-                "2. Analyze the actual output's key elements\n"
-                "3. Compare against expectations point by point\n"
-                "4. Provide your reasoning and final score\n"
-                "## Output Format\n"
-                '```json\n{"reasoning": "Step-by-step analysis...", "score": 0.85}\n```'
+            "seq": 5, "id": "builtin_fewshot", "name": "少样本评分（中文范例）", "description": "参考已标注的评分示例进行评分的中文范例模板。未提供示例时自动降级为通用质量评估。",
+            "strategy": "few_shot", "is_builtin": 1, "version": "1.0-zh",
+            "system_prompt": (
+                "你是一位资深的 AI 回复质量评估专家，负责参考已给定的评分示例，对 AI 智能体的输出进行客观、严谨的打分。\n"
+                "你必须保持与示例一致的评分标准与尺度——产出与示例相似的质量应得到相近的分数。\n"
+                "评分范围严格限定在 0.0 到 1.0 之间。"
             ),
-            "output_schema": _json.dumps({"score": "number 0-1", "reasoning": "string"}),
-            "output_format": "json", "template_content": "", "variables": _empty_json,
-            "created_at": now, "updated_at": now,
-        },
-        {
-            "seq": 5, "id": "builtin_fewshot", "name": "少样本评分 (默认)", "description": "参考示例进行评分",
-            "strategy": "few_shot", "is_builtin": 1, "version": "1.0",
-            "system_prompt": "You are an expert AI evaluation judge. Use the provided examples to guide your scoring.",
             "user_prompt_template": (
                 "{% if few_shot_examples %}"
-                "## Examples\n"
+                "## 评分参考示例\n"
+                "以下是若干已标注好分数的示例，请仔细体会其中的评分尺度与标准：\n"
                 "{% for ex in few_shot_examples %}"
-                "### Example {{ loop.index }}\n"
-                "Input: {{ ex.input }}\n"
-                "{% if ex.expected_output %}Expected: {{ ex.expected_output }}\n{% endif %}"
-                "Actual Output: {{ ex.actual_output }}\n"
-                "Score: {{ ex.score }}\n"
-                "Reasoning: {{ ex.reasoning }}\n\n"
+                "### 示例 {{ loop.index }}\n"
+                "- 用户输入：{{ ex.input }}\n"
+                "{% if ex.expected_output %}- 参考答案：{{ ex.expected_output }}\n{% endif %}"
+                "- 实际输出：{{ ex.actual_output }}\n"
+                "- 评分：{{ ex.score }}（0.0-1.0 之间的分数）\n"
+                "- 评分理由：{{ ex.reasoning }}\n\n"
                 "{% endfor %}"
+                "{% else %}"
+                "## 提示\n本次未提供评分示例，请依据通用的质量评估标准进行判断。\n"
                 "{% endif %}"
-                "## Now evaluate the following\n"
-                "### Input\n{{input}}\n\n"
-                "### Actual Output\n{{actual_output}}\n\n"
-                "Follow the format from the examples above.\n"
-                "## Output Format\n"
-                '```json\n{"reasoning": "Your analysis...", "score": 0.85}\n```'
+                "\n## 待评估内容\n"
+                "### 用户输入\n{{input}}\n\n"
+                "### 实际输出\n{{actual_output}}\n\n"
+                "{% if expected_output %}"
+                "### 参考答案\n{{expected_output}}\n\n"
+                "{% endif %}"
+                "{% if criteria %}\n## 评分准则\n请重点依据以下准则进行评判：\n{{criteria}}\n{% endif %}\n\n"
+                "## 评分要求\n请参考上方示例的评分尺度，保持标准一致。评分范围严格为 0.0 到 1.0。\n\n"
+                "## 评分标准\n"
+                "- **0.9-1.0**：优秀，准确完整，无明显缺陷\n"
+                "- **0.7-0.9**：良好，基本正确，有少量不足\n"
+                "- **0.5-0.7**：一般，存在明显缺漏或部分错误\n"
+                "- **0.3-0.5**：较差，有较多错误或信息缺失\n"
+                "- **0.0-0.3**：很差，答非所问或严重错误\n\n"
+                "## 扣分项\n出现以下情况时，应酌情扣分：\n"
+                "- **事实性错误**：包含明显错误的事实、数据或结论，扣分从重\n"
+                "- **与示例尺度不一致**：评分明显偏离示例所示的尺度，需自我校正\n"
+                "- **答非所问**：未回应用户的真实问题或意图，大幅扣分\n"
+                "- **信息缺失**：遗漏关键要点或必要信息，按缺失程度扣分\n\n"
+                "## 输出要求\n"
+                "请先简要说明评分理由，再给出最终评分。必须严格按照以下 JSON 格式输出，不要包含其他内容：\n"
+                '```json\n{"reasoning": "评分理由...", "score": 0.85}\n```'
             ),
-            "output_schema": _json.dumps({"score": "number 0-1", "reasoning": "string"}),
-            "output_format": "json", "template_content": "", "variables": _empty_json,
-            "few_shot_examples": _json.dumps([]),
+            "output_schema": _json.dumps({"score": "number 0-1 的浮点数，表示综合质量评分", "reasoning": "string，说明评分的主要依据，需与示例尺度保持一致"}, ensure_ascii=False),
+            "output_format": "json", "template_content": "", "variables": _json.dumps(["input", "actual_output", "expected_output", "criteria", "few_shot_examples"]),
+            "few_shot_examples": _json.dumps([], ensure_ascii=False),
             "created_at": now, "updated_at": now,
         },
         {
@@ -296,6 +432,312 @@ async def lifespan(app: FastAPI):
                 count = sync_conn.execute(text("SELECT COUNT(*) FROM eval_prompt_templates WHERE is_builtin = 1")).scalar()
                 if count == 0:
                     _seed_builtin_prompts(sync_conn)
+                else:
+                    # Force-refresh the builtin_simple template to the latest Chinese example
+                    # (INSERT OR IGNORE in _seed_builtin_prompts never updates existing rows).
+                    import json as _json
+                    _seed_builtin_prompts(sync_conn)
+                    sync_conn.execute(text("""
+                        UPDATE eval_prompt_templates SET
+                            name = :name,
+                            description = :description,
+                            system_prompt = :system_prompt,
+                            user_prompt_template = :user_prompt_template,
+                            output_schema = :output_schema,
+                            variables = :variables,
+                            version = '1.0-zh'
+                        WHERE id = 'builtin_simple'
+                          AND is_builtin = 1
+                          AND version != '1.0-zh'
+                    """), {
+                        "name": "通用评分（中文范例）",
+                        "description": "适用于通用质量评估的中文范例模板。可直接使用，或按需修改「评分维度」与「评分标准」适配自己的测试场景。",
+                        "system_prompt": (
+                            "你是一位资深的 AI 回复质量评估专家，负责对 AI 智能体的输出进行客观、严谨的打分。\n"
+                            "你的评分必须基于事实、逻辑清晰、标准一致——同样的回复在任何情况下都应得到相近的分数。\n"
+                            "评分范围严格限定在 0.0 到 1.0 之间。"
+                        ),
+                        "user_prompt_template": (
+                            "## 任务说明\n请评估 AI 智能体针对用户问题的回复质量，给出 0.0-1.0 的评分。\n\n"
+                            "## 用户输入\n{{input}}\n\n"
+                            "{% if expected_output %}\n## 参考答案\n以下是为该问题准备的参考答案，可作为评判质量的依据之一：\n{{expected_output}}\n{% endif %}\n\n"
+                            "{% if criteria %}\n## 评分准则\n请重点依据以下准则进行评判：\n{{criteria}}\n{% endif %}\n\n"
+                            "## 实际输出\n以下是被评估的 AI 智能体的实际回复：\n{{actual_output}}\n\n"
+                            "## 评分维度（供参考，可结合评分准则调整）\n请从以下维度综合考量：\n"
+                            "1. **准确性**：内容是否事实正确、无明显错误\n"
+                            "2. **完整性**：是否覆盖了问题的关键要点\n"
+                            "3. **相关性**：是否紧扣问题、无跑题\n"
+                            "4. **清晰度**：表达是否通顺、条理清晰\n\n"
+                            "## 评分标准\n"
+                            "- **0.9-1.0**：优秀，准确完整，无明显缺陷\n"
+                            "- **0.7-0.9**：良好，基本正确，有少量不足\n"
+                            "- **0.5-0.7**：一般，存在明显缺漏或部分错误\n"
+                            "- **0.3-0.5**：较差，有较多错误或信息缺失\n"
+                            "- **0.0-0.3**：很差，答非所问或严重错误\n\n"
+                            "## 扣分项\n出现以下情况时，应在对应维度上酌情扣分：\n"
+                            "- **事实性错误**：包含明显错误的事实、数据或结论，扣分从重\n"
+                            "- **答非所问**：未回应用户的真实问题或意图，大幅扣分\n"
+                            "- **信息缺失**：遗漏关键要点或必要信息，按缺失程度扣分\n"
+                            "- **逻辑混乱**：推理过程前后矛盾、条理不清，酌情扣分\n"
+                            "- **有害或不当内容**：包含不当、歧视性或有害表述，严重扣分\n"
+                            "- **格式错误**：未按要求的结构或格式输出，酌情扣分\n\n"
+                            "## 输出要求\n"
+                            "请先简要说明你的分析理由，再给出最终评分。必须严格按照以下 JSON 格式输出，不要包含其他内容：\n"
+                            '```json\n{"reasoning": "你的分析理由...", "score": 0.85}\n```'
+                        ),
+                        "output_schema": _json.dumps({"score": "number 0-1 的浮点数，表示综合质量评分", "reasoning": "string，说明评分的主要依据与分析过程"}, ensure_ascii=False),
+                        "variables": _json.dumps(["input", "actual_output", "expected_output", "criteria"]),
+                    })
+                    # Force-refresh the builtin_reference template to the latest Chinese example
+                    sync_conn.execute(text("""
+                        UPDATE eval_prompt_templates SET
+                            name = :name,
+                            description = :description,
+                            system_prompt = :system_prompt,
+                            user_prompt_template = :user_prompt_template,
+                            output_schema = :output_schema,
+                            variables = :variables,
+                            version = '1.0-zh'
+                        WHERE id = 'builtin_reference'
+                          AND is_builtin = 1
+                          AND version != '1.0-zh'
+                    """), {
+                        "name": "参照对比（中文范例）",
+                        "description": "将实际输出与参考答案进行对比评分的中文范例模板。未提供参考答案时自动降级为质量评估。",
+                        "system_prompt": (
+                            "你是一位资深的 AI 回复质量评估专家，负责将 AI 智能体的实际输出与参考答案进行严谨对比，并给出客观评分。\n"
+                            "你的评分必须基于事实与标准答案，逻辑清晰、标准一致——同样的对比结果在任何情况下都应得到相近的分数。\n"
+                            "评分范围严格限定在 0.0 到 1.0 之间。"
+                        ),
+                        "user_prompt_template": (
+                            "## 任务说明\n请将 AI 智能体的实际输出与参考答案进行对比，评估其匹配程度并给出 0.0-1.0 的评分。\n\n"
+                            "## 用户输入\n{{input}}\n\n"
+                            "{% if expected_output %}\n## 参考答案\n以下是为该问题准备的标准答案：\n{{expected_output}}\n{% else %}\n## 参考答案\n（本次未提供参考答案，请仅依据用户输入与实际输出，从内容质量角度进行评判。）\n{% endif %}\n\n"
+                            "{% if criteria %}\n## 评分准则\n请重点依据以下准则进行评判：\n{{criteria}}\n{% endif %}\n\n"
+                            "## 实际输出\n以下是被评估的 AI 智能体的实际回复：\n{{actual_output}}\n\n"
+                            "## 对比要求\n请逐项对比实际输出与参考答案，明确指出：\n"
+                            "1. **命中部分**：实际输出中与参考答案一致或等价的要点\n"
+                            "2. **遗漏部分**：参考答案中有、但实际输出缺失的要点\n"
+                            "3. **偏差部分**：实际输出中与参考答案矛盾、错误或多余的内容\n\n"
+                            "## 评分维度（供参考，可结合评分准则调整）\n"
+                            "1. **准确性**：与参考答案相比，事实与结论是否正确\n"
+                            "2. **完整性**：是否覆盖了参考答案的全部关键要点\n"
+                            "3. **清晰度**：表达是否通顺、结构是否清晰\n\n"
+                            "## 评分标准\n"
+                            "- **0.9-1.0**：与参考答案高度一致，要点齐全，无实质偏差\n"
+                            "- **0.7-0.9**：主要要点一致，存在少量遗漏或不精确\n"
+                            "- **0.5-0.7**：部分要点命中，但有明显遗漏或偏差\n"
+                            "- **0.3-0.5**：仅少量要点相符，大部分缺失或错误\n"
+                            "- **0.0-0.3**：与参考答案基本不符或严重偏离\n\n"
+                            "## 扣分项\n出现以下情况时，应在对应维度上酌情扣分：\n"
+                            "- **事实性错误**：与参考答案矛盾，或包含明显错误的事实、数据、结论，扣分从重\n"
+                            "- **要点遗漏**：参考答案中的关键要点未覆盖，按缺失程度扣分\n"
+                            "- **答非所问**：未回应用户的真实问题或意图，大幅扣分\n"
+                            "- **过度发挥**：加入大量参考答案之外且无关的内容，酌情扣分\n"
+                            "- **有害或不当内容**：包含不当、歧视性或有害表述，严重扣分\n\n"
+                            "## 输出要求\n"
+                            "请先给出对比分析（命中/遗漏/偏差），再给出最终评分。必须严格按照以下 JSON 格式输出，不要包含其他内容：\n"
+                            '```json\n'
+                            "{\n"
+                            '  "reasoning": "对比分析：命中...；遗漏...；偏差...",\n'
+                            '  "score": 0.85,\n'
+                            '  "dimension_scores": {\n'
+                            '    "准确性": 0.9,\n'
+                            '    "完整性": 0.8,\n'
+                            '    "清晰度": 0.85\n'
+                            "  }\n"
+                            "}\n"
+                            "```"
+                        ),
+                        "output_schema": _json.dumps({"score": "number 0-1 的浮点数，表示与参考答案的匹配程度", "reasoning": "string，包含命中/遗漏/偏差的对比分析", "dimensions": {"准确性": "number", "完整性": "number", "清晰度": "number"}}, ensure_ascii=False),
+                        "variables": _json.dumps(["input", "actual_output", "expected_output", "criteria"]),
+                    })
+                    # Force-refresh the builtin_rubric template to the latest Chinese example
+                    sync_conn.execute(text("""
+                        UPDATE eval_prompt_templates SET
+                            name = :name,
+                            description = :description,
+                            system_prompt = :system_prompt,
+                            user_prompt_template = :user_prompt_template,
+                            output_schema = :output_schema,
+                            variables = :variables,
+                            version = '1.0-zh'
+                        WHERE id = 'builtin_rubric'
+                          AND is_builtin = 1
+                          AND version != '1.0-zh'
+                    """), {
+                        "name": "多维度评分（中文范例）",
+                        "description": "对 AI 输出进行多维度评估的中文范例模板。含评分规约时按规约逐维度打分，无规约时自动降级为默认 3 维度。",
+                        "system_prompt": (
+                            "你是一位资深的 AI 回复质量评估专家，负责依据评分规约对 AI 智能体的输出进行多维度、客观的打分。\n"
+                            "你必须严格按照评分规约中定义的每个维度逐项评估，评分标准一致——同样的输出在任何情况下都应得到相近的分数。\n"
+                            "评分范围严格限定在 0.0 到 1.0 之间。"
+                        ),
+                        "user_prompt_template": (
+                            "## 任务说明\n请依据下方的评分规约，对 AI 智能体的输出进行多维度评估，给出各项维度得分及加权总分。\n\n"
+                            "## 用户输入\n{{input}}\n\n"
+                            "{% if expected_output %}\n## 参考答案\n以下是为该问题准备的标准答案，可作为评判依据之一：\n{{expected_output}}\n{% endif %}\n\n"
+                            "## 实际输出\n以下是被评估的 AI 智能体的实际回复：\n{{actual_output}}\n\n"
+                            "{% if rubric %}\n## 评分规约\n请严格按照以下规约逐维度打分：\n{{rubric}}\n{% else %}\n## 评分规约\n请从以下维度进行评估：\n"
+                            "1. **准确性**：内容是否事实正确、无明显错误\n"
+                            "2. **完整性**：是否覆盖了问题的关键要点\n"
+                            "3. **清晰度**：表达是否通顺、条理清晰\n"
+                            "{% endif %}\n\n"
+                            "## 评分要求\n"
+                            "1. **逐维度独立评估**：对上述每个维度，独立给出 0.0-1.0 的分数\n"
+                            "2. **加权总分**：若规约中标注了维度权重，按权重计算加权总分；否则取各维度平均分\n"
+                            "3. **评分一致性**：各维度得分需有明确依据\n\n"
+                            "## 评分标准（适用于每个维度）\n"
+                            "- **0.9-1.0**：该维度表现优秀，无明显缺陷\n"
+                            "- **0.7-0.9**：该维度表现良好，有少量不足\n"
+                            "- **0.5-0.7**：该维度表现一般，存在明显问题\n"
+                            "- **0.3-0.5**：该维度表现较差，缺陷较多\n"
+                            "- **0.0-0.3**：该维度表现很差或完全不满足\n\n"
+                            "## 扣分项\n出现以下情况时，应在相关维度上酌情扣分：\n"
+                            "- **事实性错误**：包含明显错误的事实、数据或结论，扣分从重\n"
+                            "- **维度缺失**：某个评分维度完全未满足，该维度大幅扣分\n"
+                            "- **答非所问**：未回应用户的真实问题或意图，大幅扣分\n"
+                            "- **有害或不当内容**：包含不当、歧视性或有害表述，严重扣分\n\n"
+                            "## 输出要求\n"
+                            "请先给出各维度的分析理由，再给出维度得分与加权总分。必须严格按照以下 JSON 格式输出：\n"
+                            '```json\n'
+                            "{\n"
+                            '  "reasoning": "各维度分析：...",\n'
+                            '  "score": 0.85,\n'
+                            '  "dimension_scores": {\n'
+                            '    "准确性": 0.9,\n'
+                            '    "完整性": 0.8,\n'
+                            '    "清晰度": 0.85\n'
+                            "  }\n"
+                            "}\n"
+                            "```"
+                        ),
+                        "output_schema": _json.dumps({"score": "number 0-1 的浮点数，表示加权总分", "reasoning": "string，包含各维度的分析理由", "dimensions": {"准确性": "number", "完整性": "number", "清晰度": "number"}}, ensure_ascii=False),
+                        "variables": _json.dumps(["input", "actual_output", "expected_output", "criteria", "rubric"]),
+                    })
+                    # Force-refresh the builtin_fewshot template to the latest Chinese example
+                    sync_conn.execute(text("""
+                        UPDATE eval_prompt_templates SET
+                            name = :name,
+                            description = :description,
+                            system_prompt = :system_prompt,
+                            user_prompt_template = :user_prompt_template,
+                            output_schema = :output_schema,
+                            variables = :variables,
+                            version = '1.0-zh'
+                        WHERE id = 'builtin_fewshot'
+                          AND is_builtin = 1
+                          AND version != '1.0-zh'
+                    """), {
+                        "name": "少样本评分（中文范例）",
+                        "description": "参考已标注的评分示例进行评分的中文范例模板。未提供示例时自动降级为通用质量评估。",
+                        "system_prompt": (
+                            "你是一位资深的 AI 回复质量评估专家，负责参考已给定的评分示例，对 AI 智能体的输出进行客观、严谨的打分。\n"
+                            "你必须保持与示例一致的评分标准与尺度——产出与示例相似的质量应得到相近的分数。\n"
+                            "评分范围严格限定在 0.0 到 1.0 之间。"
+                        ),
+                        "user_prompt_template": (
+                            "{% if few_shot_examples %}"
+                            "## 评分参考示例\n"
+                            "以下是若干已标注好分数的示例，请仔细体会其中的评分尺度与标准：\n"
+                            "{% for ex in few_shot_examples %}"
+                            "### 示例 {{ loop.index }}\n"
+                            "- 用户输入：{{ ex.input }}\n"
+                            "{% if ex.expected_output %}- 参考答案：{{ ex.expected_output }}\n{% endif %}"
+                            "- 实际输出：{{ ex.actual_output }}\n"
+                            "- 评分：{{ ex.score }}（0.0-1.0 之间的分数）\n"
+                            "- 评分理由：{{ ex.reasoning }}\n\n"
+                            "{% endfor %}"
+                            "{% else %}"
+                            "## 提示\n本次未提供评分示例，请依据通用的质量评估标准进行判断。\n"
+                            "{% endif %}"
+                            "\n## 待评估内容\n"
+                            "### 用户输入\n{{input}}\n\n"
+                            "### 实际输出\n{{actual_output}}\n\n"
+                            "{% if expected_output %}"
+                            "### 参考答案\n{{expected_output}}\n\n"
+                            "{% endif %}"
+                            "{% if criteria %}\n## 评分准则\n请重点依据以下准则进行评判：\n{{criteria}}\n{% endif %}\n\n"
+                            "## 评分要求\n请参考上方示例的评分尺度，保持标准一致。评分范围严格为 0.0 到 1.0。\n\n"
+                            "## 评分标准\n"
+                            "- **0.9-1.0**：优秀，准确完整，无明显缺陷\n"
+                            "- **0.7-0.9**：良好，基本正确，有少量不足\n"
+                            "- **0.5-0.7**：一般，存在明显缺漏或部分错误\n"
+                            "- **0.3-0.5**：较差，有较多错误或信息缺失\n"
+                            "- **0.0-0.3**：很差，答非所问或严重错误\n\n"
+                            "## 扣分项\n出现以下情况时，应酌情扣分：\n"
+                            "- **事实性错误**：包含明显错误的事实、数据或结论，扣分从重\n"
+                            "- **与示例尺度不一致**：评分明显偏离示例所示的尺度，需自我校正\n"
+                            "- **答非所问**：未回应用户的真实问题或意图，大幅扣分\n"
+                            "- **信息缺失**：遗漏关键要点或必要信息，按缺失程度扣分\n\n"
+                            "## 输出要求\n"
+                            "请先简要说明评分理由，再给出最终评分。必须严格按照以下 JSON 格式输出，不要包含其他内容：\n"
+                            '```json\n{"reasoning": "评分理由...", "score": 0.85}\n```'
+                        ),
+                        "output_schema": _json.dumps({"score": "number 0-1 的浮点数，表示综合质量评分", "reasoning": "string，说明评分的主要依据，需与示例尺度保持一致"}, ensure_ascii=False),
+                        "variables": _json.dumps(["input", "actual_output", "expected_output", "criteria", "few_shot_examples"]),
+                    })
+                    # Force-refresh the builtin_cot template to the latest Chinese example
+                    sync_conn.execute(text("""
+                        UPDATE eval_prompt_templates SET
+                            name = :name,
+                            description = :description,
+                            system_prompt = :system_prompt,
+                            user_prompt_template = :user_prompt_template,
+                            output_schema = :output_schema,
+                            variables = :variables,
+                            version = '1.0-zh'
+                        WHERE id = 'builtin_cot'
+                          AND is_builtin = 1
+                          AND version != '1.0-zh'
+                    """), {
+                        "name": "思维链评分（中文范例）",
+                        "description": "通过分步推理后再给出评分的中文范例模板。采用「先推理、后结论」的五步结构化分析。",
+                        "system_prompt": (
+                            "你是一位资深的 AI 回复质量评估专家，擅长通过严谨的分步推理，对 AI 智能体的输出进行客观、可信的打分。\n"
+                            "你必须遵循「先推理、后结论」的原则：先按步骤逐条分析，再基于分析结果给出评分，保证评分的可解释性。\n"
+                            "评分范围严格限定在 0.0 到 1.0 之间。"
+                        ),
+                        "user_prompt_template": (
+                            "## 任务说明\n请通过分步推理，评估 AI 智能体针对用户问题的回复质量，并给出 0.0-1.0 的评分。\n\n"
+                            "## 评估材料\n"
+                            "### 用户输入\n{{input}}\n\n"
+                            "{% if expected_output %}"
+                            "### 参考答案\n以下是为该问题准备的标准答案，可作为评判依据：\n{{expected_output}}\n\n"
+                            "{% endif %}"
+                            "{% if criteria %}"
+                            "### 评分准则\n请重点依据以下准则进行评判：\n{{criteria}}\n\n"
+                            "{% endif %}"
+                            "### 实际输出\n以下是被评估的 AI 智能体的实际回复：\n{{actual_output}}\n\n"
+                            "## 推理步骤\n请严格按照以下步骤逐步分析，不要跳步：\n\n"
+                            "**第 1 步 · 理解任务**\n说明用户问题的核心诉求是什么，一个理想回答应包含哪些关键要点。\n\n"
+                            "**第 2 步 · 核查事实**\n逐条检查实际输出中的事实、数据、结论是否正确，是否有明显错误或幻觉。\n\n"
+                            "**第 3 步 · 评估完整性**\n对照用户诉求（或参考答案），判断实际输出覆盖了哪些要点、遗漏了哪些要点。\n\n"
+                            "**第 4 步 · 评估表达**\n判断实际输出的结构、逻辑与表述是否清晰、有条理。\n\n"
+                            "**第 5 步 · 综合定分**\n综合以上分析，给出最终评分，并说明该分数落在哪个档位、为什么。\n\n"
+                            "## 评分标准\n"
+                            "- **0.9-1.0**：优秀，准确完整，无明显缺陷\n"
+                            "- **0.7-0.9**：良好，基本正确，有少量不足\n"
+                            "- **0.5-0.7**：一般，存在明显缺漏或部分错误\n"
+                            "- **0.3-0.5**：较差，有较多错误或信息缺失\n"
+                            "- **0.0-0.3**：很差，答非所问或严重错误\n\n"
+                            "## 扣分项\n出现以下情况时，应酌情扣分：\n"
+                            "- **事实性错误**：包含明显错误的事实、数据或结论，扣分从重\n"
+                            "- **答非所问**：未回应用户的真实问题或意图，大幅扣分\n"
+                            "- **信息缺失**：遗漏关键要点或必要信息，按缺失程度扣分\n"
+                            "- **逻辑混乱**：推理过程前后矛盾、条理不清，酌情扣分\n\n"
+                            "## 输出要求\n"
+                            "`reasoning` 字段中请完整保留上述 5 个步骤的分析过程。必须严格按照以下 JSON 格式输出，不要包含其他内容：\n"
+                            '```json\n'
+                            "{\n"
+                            '  "reasoning": "第1步：...\\n第2步：...\\n第3步：...\\n第4步：...\\n第5步：...",\n'
+                            '  "score": 0.85\n'
+                            "}\n"
+                            "```"
+                        ),
+                        "output_schema": _json.dumps({"score": "number 0-1 的浮点数，表示综合质量评分", "reasoning": "string，包含完整的5步推理分析过程"}, ensure_ascii=False),
+                        "variables": _json.dumps(["input", "actual_output", "expected_output", "criteria"]),
+                    })
 
             # Auto-create default ScoreConfigs for all three scoring types
             if "score_configs" in table_names:
