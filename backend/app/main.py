@@ -885,6 +885,9 @@ async def lifespan(app: FastAPI):
         )
 
     yield
+    # Release the pooled HTTP client used by AI judge calls
+    from app.judge import close_shared_client
+    await close_shared_client()
     await engine.dispose()
 
 

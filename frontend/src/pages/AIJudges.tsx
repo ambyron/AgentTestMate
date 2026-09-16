@@ -60,7 +60,7 @@ function buildJudgeRequest(values: any) {
 
   const params = values.parameters || {};
   const temperature = params.temperature ?? 0.0;
-  const maxTokens = params.max_tokens ?? 2048;
+  const maxTokens = params.max_tokens ?? 4096;
 
   let body: any = {};
   if (provider === 'anthropic') {
@@ -137,7 +137,10 @@ const AIJudges: React.FC = () => {
       form.setFieldsValue(values);
     } else {
       form.resetFields();
-      form.setFieldsValue({ provider: 'custom', auth_type: 'bearer', status: 'active', parameters: { temperature: 0.0, max_tokens: 2048 } });
+      form.setFieldsValue({
+        provider: 'custom', auth_type: 'bearer', status: 'active',
+        parameters: { temperature: 0.0, max_tokens: 4096, timeout_ms: 60000, max_retries: 2 },
+      });
     }
     setModalOpen(true);
   };
@@ -248,8 +251,26 @@ const AIJudges: React.FC = () => {
                           <Form.Item name={['parameters', 'temperature']} label="温度" initialValue={0.0}>
                             <InputNumber min={0} max={2} step={0.1} style={{ width: 120 }} />
                           </Form.Item>
-                          <Form.Item name={['parameters', 'max_tokens']} label="最大 Token" initialValue={2048}>
+                          <Form.Item name={['parameters', 'max_tokens']} label="最大 Token" initialValue={4096}>
                             <InputNumber min={64} max={32768} step={64} style={{ width: 140 }} />
+                          </Form.Item>
+                        </Space>
+                        <Space style={{ width: '100%' }} size={16}>
+                          <Form.Item
+                            name={['parameters', 'timeout_ms']}
+                            label="单次超时 (ms)"
+                            initialValue={60000}
+                            tooltip="单次调用的读取超时。默认 60000ms。总耗时约为 (重试次数+1) × 单次超时。"
+                          >
+                            <InputNumber min={5000} max={600000} step={5000} style={{ width: 160 }} />
+                          </Form.Item>
+                          <Form.Item
+                            name={['parameters', 'max_retries']}
+                            label="失败重试次数"
+                            initialValue={2}
+                            tooltip="仅对超时/连接失败/429/5xx 重试，退避 1s→2s→4s。认证与请求错误立即失败。"
+                          >
+                            <InputNumber min={0} max={5} step={1} style={{ width: 140 }} />
                           </Form.Item>
                         </Space>
                       </>

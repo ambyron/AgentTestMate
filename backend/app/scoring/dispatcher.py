@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import importlib.metadata
 from pathlib import Path
 from typing import Any
 
+from app.config import settings
 from app.scoring.base import BaseScorer
 from app.scoring.builtins import (
     ExactMatchScorer,
@@ -81,11 +83,27 @@ class RuleDispatcher:
                 threshold=ctx.rule_threshold,
                 passed=False,
                 error=f"No scorer registered for rule_type '{rule_type}'",
+                evaluation_failed=True,
             )
         try:
-            result = await scorer.score(ctx)
+            result = await self._score_with_deadline(scorer, ctx)
             result.data_type = getattr(scorer, "score_data_type", "NUMERIC")
+            # A score of exactly 0.0 produced by an evaluator error is not a real
+            # evaluation result — normalize the flag so the aggregator can skip it.
+            if result.error and result.score == 0.0:
+                result.evaluation_failed = True
             return result
+        except asyncio.TimeoutError:
+            return ScoreResult(
+                rule_id=ctx.rule_config.get("_rule_id", ""),
+                rule_type=rule_type,
+                score=0.0,
+                threshold=ctx.rule_threshold,
+                passed=False,
+                error=f"评估超时（超过硬上限 {settings.ai_judge_hard_deadline_ms}ms）",
+                evaluation_failed=True,
+                details={"ai_error": True, "error_kinds": ["timeout"]},
+            )
         except Exception as e:
             return ScoreResult(
                 rule_id=ctx.rule_config.get("_rule_id", ""),
@@ -94,4 +112,21 @@ class RuleDispatcher:
                 threshold=ctx.rule_threshold,
                 passed=False,
                 error=str(e),
+                evaluation_failed=True,
             )
+
+    @staticmethod
+    async def _score_with_deadline(scorer: BaseScorer, ctx: ScoringContext) -> ScoreResult:
+        """Run a scorer under a hard wall-clock ceiling.
+
+        The httpx timeout only bounds a *single* HTTP attempt; retries multiply
+        that. This ceiling guarantees that no rule can ever hang a case forever.
+        """
+        hard_ms = ctx.parameters.get("hard_deadline_ms") if ctx.parameters else None
+        try:
+            hard_ms = int(hard_ms) if hard_ms else settings.ai_judge_hard_deadline_ms
+        except (TypeError, ValueError):
+            hard_ms = settings.ai_judge_hard_deadline_ms
+        if hard_ms <= 0:
+            return await scorer.score(ctx)
+        return await asyncio.wait_for(scorer.score(ctx), timeout=hard_ms / 1000.0)

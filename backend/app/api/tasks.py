@@ -140,6 +140,19 @@ async def start_task(task_id: str, background_tasks: BackgroundTasks, db: AsyncS
     return {"message": "Task started", "task_id": task_id}
 
 
+def _judge_parameters(judge_map: dict) -> dict | None:
+    """Merge AI judge model parameters into a single params dict.
+
+    Uses the first configured judge model as the source of truth for
+    temperature / max_tokens / timeout_ms / max_retries.
+    """
+    if not judge_map:
+        return None
+    first = next(iter(judge_map.values()), None)
+    params = first.parameters if first is not None and isinstance(first.parameters, dict) else {}
+    return dict(params) if params else None
+
+
 async def _execute_task(task_id: str, engine: TaskExecutionEngine):
     """Background execution of test cases — uses its own DB session."""
     from app.__init_db import async_session_factory
@@ -275,6 +288,7 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                 completed = 0
                 failed = 0
                 passed_count = 0
+                eval_failed = 0
 
                 async for exec_result in engine.execute(agent_cfg, case_dicts):
                     completed += 1
@@ -291,6 +305,10 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                         applicable = [r for r in all_rules if r.id in case_rule_refs]
 
                     if applicable:
+                        # Build one ScoringContext per rule, then evaluate them
+                        # concurrently — AI rules are independent and each carries
+                        # its own timeout, so one slow judge no longer blocks the rest.
+                        _contexts: list[tuple[str, ScoringContext]] = []
                         for rule in applicable:
                             # Ensure rule.config is a dict (defensive against bad imports)
                             raw_config = rule.config
@@ -314,6 +332,9 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                                     "model_name": _jm.model_name or "gpt-4o",
                                     "api_base_url": _jm.api_base_url or "",
                                     "auth_credentials": _jm.auth_credentials or "",
+                                    "headers_template": _jm.headers_template or {},
+                                    # Per-model parameters (temperature / max_tokens / timeout_ms / max_retries)
+                                    "parameters": _jm.parameters or {},
                                 }
 
                             ctx = ScoringContext(
@@ -336,13 +357,19 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                                 few_shot_examples=_prompt_tpl.few_shot_examples if _prompt_tpl else None,
                                 # Judge model config
                                 judge_models=_judge_models or None,
+                                # Per-model judge parameters (timeout / max_tokens / retries)
+                                parameters=_judge_parameters(judge_map),
                                 # Rubric text
                                 rubric_text=_rubric.description if _rubric else None,
                                 # Criteria from rule config
                                 criteria=raw_config.get("criteria", ""),
                             )
-                            sr = await dispatcher.evaluate(ctx, rule.type)
-                            score_results.append(sr)
+                            _contexts.append((rule.type, ctx))
+
+                        _raw_results = await asyncio.gather(*[
+                            dispatcher.evaluate(_c, _t) for _t, _c in _contexts
+                        ])
+                        score_results = list(_raw_results)
 
                         aggregated = aggregator.aggregate(
                             score_results=score_results,
@@ -357,6 +384,9 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                         passed = aggregated.passed
                         total_score = aggregated.total_score
 
+                        if aggregated.evaluation_failed:
+                            eval_failed += 1
+
                         # ── Log detailed scoring results ──────────────
                         rule_logs = "  ".join(
                             f"{sr.rule_type}={sr.score:.4f}({'PASS' if sr.passed else 'FAIL'}{' ERR' if sr.error else ''})"
@@ -367,8 +397,10 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                             for k, v in aggregated.objective_scores.items()
                         )
                         logger.info(
-                            "[SCORE  ] case=%-12s result=%s  total=%.4f",
-                            exec_result.case_id, "PASS" if passed else "FAIL", total_score,
+                            "[SCORE  ] case=%-12s result=%s%s  total=%.4f",
+                            exec_result.case_id, "PASS" if passed else "FAIL",
+                            "  [EVAL-ERROR]" if aggregated.evaluation_failed else "",
+                            total_score,
                         )
                         if rule_logs:
                             logger.info("[SCORE  ]   rules:       %s", rule_logs)
@@ -379,6 +411,9 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                         scores_dict = {
                             "total": aggregated.total_score,
                             "passed": aggregated.passed,
+                            # Distinguishes "evaluator failed" from "response genuinely scored low"
+                            "evaluation_failed": aggregated.evaluation_failed,
+                            "failed_rule_count": aggregated.failed_rule_count,
                             "objectives": {
                                 k: {"score": v.score, "passed": v.passed, "weight": v.weight, "threshold": v.threshold}
                                 for k, v in aggregated.objective_scores.items()
@@ -389,6 +424,7 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                                  "objectives": rule_objective_map.get(sr.rule_id, []),
                                  "score": sr.score, "passed": sr.passed,
                                  "data_type": sr.data_type,
+                                 "evaluation_failed": sr.evaluation_failed,
                                  "details": sr.details, "error": sr.error}
                                 for sr in score_results
                             ],
@@ -423,9 +459,16 @@ async def _execute_task(task_id: str, engine: TaskExecutionEngine):
                     })
 
                     await repo.update_task(db, task_id, {
-                        "progress": {"total": total, "completed": completed, "failed": failed, "passed": passed_count},
+                        "progress": {"total": total, "completed": completed,
+                                     "failed": failed, "passed": passed_count,
+                                     "evaluation_failed": eval_failed},
                     })
                     await db.commit()
+
+            logger.info(
+                "TASK   %s  total=%d  completed=%d  passed=%d  failed=%d  eval_error=%d",
+                task_id, total, completed, passed_count, failed, eval_failed,
+            )
 
             final_status = "cancelled" if engine.is_cancelled else "completed"
             await repo.update_task(db, task_id, {

@@ -5,8 +5,14 @@ Scenarios:
   B. case_objectives empty → use all_rule_objectives as implicit objectives
   C. case_objectives exist but no rules match → unscored objectives handled via else
 
+Failure handling (evaluation_failed):
+  Rules whose evaluator itself failed (AI judge timeout / network / parse error)
+  are excluded from the objective average, so a transient judge glitch does not
+  silently drag a case's score to 0. If EVERY rule for a case failed, the case is
+  reported as an *evaluation failure* rather than a genuine low score.
+
 Formula (simple average within objective):
-    objective_score = Σ(rule_score) / len(rules)
+    objective_score = Σ(rule_score of usable rules) / len(usable rules)
     total_score     = Σ(objective_score × objective_weight) / Σ(objective_weight)
 """
 
@@ -34,7 +40,26 @@ class ScoreAggregator:
         all_rule_objectives: list[str] | None = None,
     ) -> AggregatedScores:
         if not score_results:
-            return AggregatedScores(total_score=0.0, passed=False, objective_scores={}, category_scores={})
+            return AggregatedScores(
+                total_score=0.0, passed=False, objective_scores={},
+                category_scores={}, evaluation_failed=True, failed_rule_count=0,
+            )
+
+        # 0. Split usable results from evaluator failures.
+        #    Failed rules keep score=0.0 for the record but must not be averaged in.
+        usable = [sr for sr in score_results if not sr.evaluation_failed]
+        failed_count = len(score_results) - len(usable)
+
+        # Every rule failed → this case tells us nothing about quality.
+        if not usable:
+            return AggregatedScores(
+                total_score=0.0,
+                passed=False,          # never reward an evaluator outage
+                objective_scores={},
+                category_scores={},
+                evaluation_failed=True,
+                failed_rule_count=failed_count,
+            )
 
         # 1. Determine effective objectives
         if not case_objectives and all_rule_objectives:
@@ -43,9 +68,9 @@ class ScoreAggregator:
         else:
             effective_objectives = case_objectives
 
-        # 2. Group by objective
+        # 2. Group by objective (usable rules only)
         obj_scores: dict[str, list[ScoreResult]] = {}
-        for sr in score_results:
+        for sr in usable:
             objectives = rule_objective_map.get(sr.rule_id, effective_objectives)
             for obj in objectives:
                 obj_scores.setdefault(obj, []).append(sr)
@@ -69,13 +94,15 @@ class ScoreAggregator:
             total_w = sum(o.weight for o in objective_results.values())
             final_score = sum(o.score * o.weight for o in objective_results.values()) / total_w if total_w > 0 else 0.0
         else:
-            final_score = 0.0
+            final_score = self._avg_score(usable)
 
-        passed = final_score >= global_threshold if (score_results or objective_results) else False
+        passed = final_score >= global_threshold
 
         return AggregatedScores(
             total_score=final_score,
             passed=passed,
             objective_scores=objective_results,
             category_scores={},
+            evaluation_failed=False,
+            failed_rule_count=failed_count,
         )

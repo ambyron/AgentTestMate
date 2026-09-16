@@ -197,15 +197,25 @@ def _extract_dimensions(data: dict, schema: dict | None) -> dict[str, float]:
 def parse_by_schema(raw: str, schema: dict | None) -> dict:
     """Unified schema-driven response parser shared by all strategies.
 
-    Returns dict with keys: score (normalized to [0,1]), reasoning, dimension_scores.
+    Returns dict with keys: score (normalized to [0,1]), reasoning,
+    dimension_scores, and parse_failed (True when the output could not be
+    parsed at all — in that case the score is NOT a real evaluation result).
     """
     parsed = _parse_json_response(raw)
     if not parsed:
-        return {"score": 0.0, "reasoning": raw[:500], "dimension_scores": {}}
+        return {
+            "score": 0.0,
+            "reasoning": raw[:500],
+            "dimension_scores": {},
+            "parse_failed": True,
+            "error_kind": "empty_response" if not (raw or "").strip() else "parse_error",
+        }
     return {
         "score": _extract_number(parsed, schema),
         "reasoning": _extract_text(parsed, schema) or str(parsed.get("reasoning", "") or ""),
         "dimension_scores": _extract_dimensions(parsed, schema),
+        "parse_failed": False,
+        "error_kind": None,
     }
 
 

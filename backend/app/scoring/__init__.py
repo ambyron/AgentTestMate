@@ -46,6 +46,9 @@ class ScoreResult:
     ai_dimension_scores: dict | None = None
     ai_arbitration: dict | None = None
     error: str | None = None
+    # True when the evaluator itself failed (timeout / network / parse error),
+    # as opposed to the response genuinely scoring below the threshold.
+    evaluation_failed: bool = False
     # Multi-type scoring fields
     data_type: str = "NUMERIC"  # NUMERIC / BOOLEAN / CATEGORICAL
     categorical_value: str | None = None  # selected category label
@@ -75,3 +78,7 @@ class AggregatedScores:
     passed: bool
     objective_scores: dict[str, ObjectiveScore]
     category_scores: dict[str, CategoryScore]
+    # True when every contributing rule failed to produce a real score.
+    evaluation_failed: bool = False
+    # Number of rules that failed to produce a real score.
+    failed_rule_count: int = 0

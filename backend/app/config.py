@@ -52,9 +52,14 @@ class Settings(BaseSettings):
 
     # ── AI Judge ─────────────────────────────────────────
     ai_judge_default_temperature: float = 0.0
-    ai_judge_default_max_tokens: int = 2048
-    ai_judge_scoring_timeout_ms: int = 30_000
+    ai_judge_default_max_tokens: int = 4096
+    # Per-request read timeout for a single judge call.
+    # Worst-case case latency ≈ (max_retries + 1) × timeout + backoff.
+    ai_judge_scoring_timeout_ms: int = 60_000
     ai_judge_max_retries: int = 2
+    # Hard ceiling for a single rule's evaluation (covers all retries).
+    # = (max_retries + 1) × timeout + backoff(3s) + 5s safety margin
+    ai_judge_hard_deadline_ms: int = 188_000
 
     # ── Logging ──────────────────────────────────────────
     log_level: str = "INFO"

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Table, Tag, Button, Typography, Progress, Space, Descriptions, Divider, message, Modal, Form, Input, Select, Rate } from 'antd';
+import { Card, Table, Tag, Button, Typography, Progress, Space, Descriptions, Divider, message, Modal, Form, Input, Select, Rate, Alert } from 'antd';
 import { ArrowLeftOutlined, PlayCircleOutlined, PauseCircleOutlined, StopOutlined, ReloadOutlined, AuditOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { tasks, agents, datasets, rules, aiJudges, annotations } from '../api/client';
@@ -204,6 +204,12 @@ const TaskDetail: React.FC = () => {
         <div className="stat-card"><div className="stat-label">总计</div><div className="stat-value">{summary?.total || 0}</div></div>
         <div className="stat-card"><div className="stat-label">通过</div><div className="stat-value" style={{ color: 'var(--success)' }}>{summary?.passed || 0}</div></div>
         <div className="stat-card"><div className="stat-label">失败</div><div className="stat-value" style={{ color: 'var(--danger)' }}>{summary?.failed || 0}</div></div>
+        {task.progress?.evaluation_failed > 0 && (
+          <div className="stat-card">
+            <div className="stat-label">评估异常</div>
+            <div className="stat-value" style={{ color: '#d46b08' }}>{task.progress.evaluation_failed}</div>
+          </div>
+        )}
         <div className="stat-card"><div className="stat-label">通过率</div><div className="stat-value">{((summary?.pass_rate || 0) * 100).toFixed(1)}%</div></div>
       </div>
 
@@ -315,6 +321,16 @@ const TaskDetail: React.FC = () => {
                   <Divider style={{ margin: '12px 0' }} />
                   <Typography.Text strong style={{ marginBottom: 8, display: 'block' }}>规则评分明细</Typography.Text>
 
+                  {r.scores.evaluation_failed && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      style={{ marginBottom: 12 }}
+                      message="评估异常：所有评估规则均调用失败"
+                      description="该用例的 AI 评估模型调用超时或返回异常，得分 0 并非模型真实表现。建议检查 AI 评估模型配置或稍后重跑。"
+                    />
+                  )}
+
                   {r.scores.rules && r.scores.rules.length > 0 && (
                     <div style={{ marginBottom: 12 }}>
                       <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>各规则评分</Typography.Text>
@@ -345,6 +361,9 @@ const TaskDetail: React.FC = () => {
                                 {rule.passed ? 'PASS' : 'FAIL'}
                               </span>
                             </>
+                          )}
+                          {rule.evaluation_failed && (
+                            <Tag color="warning" style={{ marginRight: 0 }}>评估异常</Tag>
                           )}
                           {rule.error && <span style={{ color: '#cf1322', fontSize: 12 }}>错误: {rule.error}</span>}
                         </div>
@@ -378,7 +397,12 @@ const TaskDetail: React.FC = () => {
         }}
         columns={[
           { title: 'Case ID', dataIndex: 'case_id', width: 120 },
-          { title: '通过', dataIndex: 'passed', width: 80, render: (v: boolean) => v ? <Tag color="success">PASS</Tag> : <Tag color="error">FAIL</Tag> },
+          {
+            title: '通过', dataIndex: 'passed', width: 100,
+            render: (v: boolean, r: any) => r?.scores?.evaluation_failed
+              ? <Tag color="warning">评估异常</Tag>
+              : (v ? <Tag color="success">PASS</Tag> : <Tag color="error">FAIL</Tag>),
+          },
           { title: '评分', dataIndex: 'total_score', width: 80, render: (v: number) => v?.toFixed(2) },
           { title: '响应(ms)', dataIndex: 'response_time_ms', width: 100, render: (v: number) => v ?? '-' },
           { title: '状态码', dataIndex: 'status_code', width: 80 },
